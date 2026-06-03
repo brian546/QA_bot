@@ -74,18 +74,6 @@ def main() -> None:
     if skipped:
         st.info(f"Skipped duplicates or invalid files: {', '.join(skipped)}")
 
-    st.subheader("Accepted documents")
-    if st.session_state.uploaded_docs:
-        for doc in st.session_state.uploaded_docs:
-            with st.container(border=True):
-                st.markdown(f"**{doc.get('filename', 'unknown.pdf')}**")
-                st.caption(
-                    f"pages: {doc.get('page_count', 0)} | chunks: {doc.get('chunk_count', 0)}"
-                )
-    else:
-        st.caption("No documents uploaded in this session.")
-
-
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
