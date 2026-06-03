@@ -4,9 +4,13 @@ from project.backend.app.graph.state import GraphState
 
 
 def route_after_ingest(state: GraphState) -> str:
-    if not state.get("uploaded_documents"):
-        return "fallback"
-    return "rewrite_query"
+    return "query_router"
+
+
+def route_after_query_router(state: GraphState) -> str:
+    if state.get("needs_document_search"):
+        return "rewrite_query"
+    return "answer_direct"
 
 
 def route_after_evaluate(state: GraphState) -> str:

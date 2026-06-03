@@ -3,8 +3,8 @@ from project.backend.app.core.session_store import InMemorySessionStore
 from project.backend.app.graph.builder import build_graph
 
 
-def test_graph_routes_to_fallback_without_docs() -> None:
-    settings = Settings(OPENROUTER_API_KEY="x", OPENROUTER_MODEL="openai/gpt-4o-mini")
+def test_graph_routes_to_direct_answer_without_docs() -> None:
+    settings = Settings(OPENROUTER_API_KEY="x", OPENROUTER_MODEL="openai/gpt-oss-120b:free")
     store = InMemorySessionStore()
     graph = build_graph(settings, store)
 
@@ -17,4 +17,5 @@ def test_graph_routes_to_fallback_without_docs() -> None:
         }
     )
 
-    assert "could not find enough evidence" in result["final_answer"].lower()
+    assert result.get("route_decision") == "direct"
+    assert result.get("final_answer")

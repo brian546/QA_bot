@@ -17,8 +17,8 @@ from project.backend.app.core.session_store import session_store
 @pytest.fixture(autouse=True)
 def _test_env() -> None:
     os.environ.setdefault("OPENROUTER_API_KEY", "test-key")
-    os.environ.setdefault("OPENROUTER_MODEL", "openai/gpt-4o-mini")
-    os.environ.setdefault("OPENROUTER_ALLOWED_MODELS", "openai/gpt-4o-mini,anthropic/claude-3.5-sonnet")
+    os.environ.setdefault("OPENROUTER_MODEL", "openai/gpt-oss-120b:free")
+    os.environ.setdefault("OPENROUTER_ALLOWED_MODELS", "openai/gpt-oss-120b:free,anthropic/claude-3.5-sonnet")
     get_settings.cache_clear()
     session_store.clear_all()
     yield

@@ -8,7 +8,13 @@ from project.backend.app.core.session_store import InMemorySessionStore
 from project.backend.app.graph.state import GraphState
 from project.backend.app.services.hybrid_retrieval import build_diagnostics, reciprocal_rank_fusion
 from project.backend.app.services.lexical_retrieval import retrieve_lexical
-from project.backend.app.services.qa import answer_with_evidence, compress_evidence, rewrite_query_with_history
+from project.backend.app.services.qa import (
+    answer_directly,
+    answer_with_evidence,
+    compress_evidence,
+    rewrite_query_with_history,
+    should_search_documents,
+)
 from project.backend.app.services.semantic_retrieval import retrieve_semantic
 
 
@@ -27,8 +33,30 @@ class GraphNodes:
         state.setdefault("uploaded_files", [])
         return state
 
-    def rewrite_query(self, state: GraphState) -> GraphState:
+    def query_router(self, state: GraphState) -> GraphState:
         llm_settings = validate_and_merge_llm_settings(self.settings, state.get("llm_settings"))
+        docs_available = bool(state.get("uploaded_documents"))
+        needs_search = should_search_documents(
+            self.settings,
+            state.get("current_question", ""),
+            state.get("chat_history", []),
+            docs_available,
+            llm_settings,
+        )
+
+        # No docs means retrieval is impossible, so route direct.
+        if not docs_available:
+            needs_search = False
+
+        state["effective_llm_settings"] = llm_settings
+        state["needs_document_search"] = needs_search
+        state["route_decision"] = "search" if needs_search else "direct"
+        return state
+
+    def rewrite_query(self, state: GraphState) -> GraphState:
+        llm_settings = state.get("effective_llm_settings") or validate_and_merge_llm_settings(
+            self.settings, state.get("llm_settings")
+        )
         rewritten = rewrite_query_with_history(
             self.settings,
             state.get("current_question", ""),
@@ -37,6 +65,20 @@ class GraphNodes:
         )
         state["rewritten_query"] = rewritten
         state["effective_llm_settings"] = llm_settings
+        return state
+
+    def answer_direct(self, state: GraphState) -> GraphState:
+        answer, confidence = answer_directly(
+            self.settings,
+            state.get("current_question", ""),
+            state.get("chat_history", []),
+            bool(state.get("uploaded_documents")),
+            state.get("effective_llm_settings", {}),
+        )
+        state["final_answer"] = answer
+        state["confidence"] = confidence
+        state["citations"] = []
+        state["retrieval_diagnostics"] = {"lexical_hits": [], "semantic_hits": [], "fused_hits": []}
         return state
 
     def lexical_retrieve(self, state: GraphState) -> GraphState:
@@ -92,6 +134,10 @@ class GraphNodes:
         return state
 
     def evaluate_answer(self, state: GraphState) -> GraphState:
+        if state.get("route_decision") == "direct":
+            state["should_fallback"] = False
+            return state
+
         has_docs = bool(state.get("uploaded_documents"))
         has_evidence = bool(state.get("fused_results"))
         has_citations = bool(state.get("citations"))

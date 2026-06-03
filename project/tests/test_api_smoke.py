@@ -17,7 +17,7 @@ def test_api_smoke_health_and_ask() -> None:
             "question": "What is this about?",
             "chat_history": [],
             "llm_settings": {
-                "model": "openai/gpt-4o-mini",
+                "model": "openai/gpt-oss-120b:free",
                 "temperature": 0.0,
                 "top_p": 0.2,
                 "max_tokens": 500,

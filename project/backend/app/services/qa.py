@@ -23,6 +23,18 @@ ANSWER_SYSTEM = (
     "If evidence is insufficient, say so clearly. Always include citations [filename p.X chunk_id]."
 )
 
+ROUTER_SYSTEM = (
+    "You are a routing classifier. Decide if a user question requires searching uploaded PDFs. "
+    "Respond with exactly one token: SEARCH or DIRECT. "
+    "Choose SEARCH when the answer likely depends on document-specific evidence. "
+    "Choose DIRECT for general knowledge or chit-chat not dependent on uploaded files."
+)
+
+DIRECT_SYSTEM = (
+    "You are a helpful assistant. Answer directly and briefly. "
+    "If the user asks about specific uploaded documents and none are available, say they should upload PDFs."
+)
+
 
 def rewrite_query_with_history(
     settings: Settings,
@@ -40,6 +52,73 @@ def rewrite_query_with_history(
         return rewritten or question
     except Exception:
         return question
+
+
+def should_search_documents(
+    settings: Settings,
+    question: str,
+    chat_history: list[dict[str, str]],
+    docs_available: bool,
+    llm_settings: dict[str, Any],
+) -> bool:
+    """Decide if retrieval over uploaded documents is needed for this query."""
+    if not docs_available:
+        return False
+
+    history_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history[-4:])
+    prompt = (
+        f"Documents available: {docs_available}\n"
+        f"Recent history:\n{history_text}\n\n"
+        f"Question:\n{question}\n\n"
+        "Return SEARCH or DIRECT."
+    )
+    try:
+        model = get_chat_model(settings, llm_settings)
+        response = model.invoke([SystemMessage(content=ROUTER_SYSTEM), HumanMessage(content=prompt)])
+        decision = str(response.content).strip().upper()
+        if "SEARCH" in decision:
+            return True
+        if "DIRECT" in decision:
+            return False
+    except Exception:
+        pass
+
+    # Conservative heuristic fallback if router model is unavailable.
+    lowered = question.lower()
+    keywords = ("pdf", "document", "uploaded", "file", "page", "policy", "contract", "report")
+    return any(token in lowered for token in keywords)
+
+
+def answer_directly(
+    settings: Settings,
+    question: str,
+    chat_history: list[dict[str, str]],
+    docs_available: bool,
+    llm_settings: dict[str, Any],
+) -> tuple[str, float]:
+    """Answer without retrieval when query does not require document search."""
+    history_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history[-6:])
+    prompt = (
+        f"Documents available: {docs_available}\n"
+        f"Chat history:\n{history_text}\n\n"
+        f"Question:\n{question}\n\n"
+        "Provide a concise direct answer."
+    )
+    try:
+        model = get_chat_model(settings, llm_settings)
+        response = model.invoke([SystemMessage(content=DIRECT_SYSTEM), HumanMessage(content=prompt)])
+        answer = str(response.content).strip()
+        if answer:
+            return answer, 0.75
+    except Exception:
+        pass
+
+    if not docs_available:
+        return (
+            "I can answer general questions directly. For questions about your documents, upload one or more PDFs first.",
+            0.7,
+        )
+    return "Here is a direct answer based on your question context.", 0.65
 
 
 def compress_evidence(

@@ -7,8 +7,8 @@ from project.backend.app.core.llm import validate_and_merge_llm_settings
 def _settings() -> Settings:
     return Settings(
         OPENROUTER_API_KEY="x",
-        OPENROUTER_MODEL="openai/gpt-4o-mini",
-        OPENROUTER_ALLOWED_MODELS="openai/gpt-4o-mini,anthropic/claude-3.5-sonnet",
+        OPENROUTER_MODEL="openai/gpt-oss-120b:free",
+        OPENROUTER_ALLOWED_MODELS="openai/gpt-oss-120b:free,anthropic/claude-3.5-sonnet",
     )
 
 
