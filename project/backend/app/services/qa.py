@@ -93,13 +93,11 @@ def answer_directly(
     settings: Settings,
     question: str,
     chat_history: list[dict[str, str]],
-    docs_available: bool,
     llm_settings: dict[str, Any],
 ) -> tuple[str, float]:
     """Answer without retrieval when query does not require document search."""
     history_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history[-6:])
     prompt = (
-        f"Documents available: {docs_available}\n"
         f"Chat history:\n{history_text}\n\n"
         f"Question:\n{question}\n\n"
         "Provide a concise direct answer."
@@ -113,12 +111,10 @@ def answer_directly(
     except Exception:
         pass
 
-    if not docs_available:
-        return (
-            "I can answer general questions directly. For questions about your documents, upload one or more PDFs first.",
-            0.7,
-        )
-    return "Here is a direct answer based on your question context.", 0.65
+    return (
+        "I can answer general questions directly. For questions about your documents, upload one or more PDFs first.",
+        0.7,
+    )
 
 
 def compress_evidence(

@@ -13,7 +13,6 @@ for candidate in (str(REPO_ROOT), str(CURRENT_DIR)):
         sys.path.insert(0, candidate)
 
 from project.frontend.api_client import APIClient
-from project.frontend.components.browser_cleanup import mount_browser_cleanup_listener
 from project.frontend.components.llm_controls import render_llm_controls
 from project.frontend.utils import (
     DEFAULT_BACKEND_URL,
@@ -32,16 +31,14 @@ def main() -> None:
     st.set_page_config(page_title="Hybrid PDF QA", layout="wide")
     st.title("Hybrid Multi-PDF QA")
 
-    backend_url = st.sidebar.text_input("Backend URL", value=DEFAULT_BACKEND_URL)
-    client = APIClient(backend_url)
+    # backend_url = st.sidebar.text_input("Backend URL", value=DEFAULT_BACKEND_URL)
+    client = APIClient(DEFAULT_BACKEND_URL)
 
     try:
         ensure_state(client)
     except requests.RequestException as exc:
         st.error(f"Failed to load runtime config from backend: {exc}")
         st.stop()
-
-    mount_browser_cleanup_listener(backend_url, st.session_state.session_id)
 
     st.sidebar.markdown(f"Session: `{st.session_state.session_id}`")
     if st.sidebar.button("Clear session", use_container_width=True):
@@ -87,12 +84,24 @@ def main() -> None:
         with st.chat_message("assistant"):
             with st.spinner("Retrieving evidence and generating grounded answer..."):
                 try:
-                    response = client.ask(
-                        session_id=st.session_state.session_id,
-                        question=question,
-                        chat_history=build_chat_history(st.session_state.messages[:-1]),
-                        llm_settings=st.session_state.llm_settings,
-                    )
+                    response = requests.post(
+                                f"http://localhost:8000/ask",
+                                json={
+                                    "session_id": st.session_state.session_id,
+                                    "question": question,
+                                    "chat_history": build_chat_history(st.session_state.messages[:-1]),
+                                    "llm_settings": st.session_state.llm_settings,
+                                },
+                                timeout=120,
+                            )
+                    response.raise_for_status()
+                    response = response.json()
+                    # response = client.ask(
+                    #     session_id=st.session_state.session_id,
+                    #     question=question,
+                    #     chat_history=build_chat_history(st.session_state.messages[:-1]),
+                    #     llm_settings=st.session_state.llm_settings,
+                    # )
                 except requests.RequestException as exc:
                     st.error(f"Ask failed: {exc}")
                     return

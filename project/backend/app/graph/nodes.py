@@ -72,7 +72,6 @@ class GraphNodes:
             self.settings,
             state.get("current_question", ""),
             state.get("chat_history", []),
-            bool(state.get("uploaded_documents")),
             state.get("effective_llm_settings", {}),
         )
         state["final_answer"] = answer
