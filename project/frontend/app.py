@@ -1,7 +1,16 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import requests
 import streamlit as st
+
+CURRENT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = CURRENT_DIR.parent.parent
+for candidate in (str(REPO_ROOT), str(CURRENT_DIR)):
+    if candidate not in sys.path:
+        sys.path.insert(0, candidate)
 
 from project.frontend.api_client import APIClient
 from project.frontend.components.browser_cleanup import mount_browser_cleanup_listener

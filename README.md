@@ -139,19 +139,19 @@ cp .env.example .env
 3. Run FastAPI backend.
 
 ```bash
-uvicorn project.backend.app.main:app --reload --port 8000
+uv run uvicorn project.backend.app.main:app --reload --port 8000
 ```
 
 4. Run Streamlit frontend.
 
 ```bash
-streamlit run project/frontend/app.py --server.port 8511
+uv run streamlit run project/frontend/app.py --server.port 8511
 ```
 
 5. Run tests.
 
 ```bash
-pytest project/tests -q
+uv run pytest project/tests -q
 ```
 
 ## Why Hybrid Retrieval?

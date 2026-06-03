@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+import streamlit as st
 import streamlit.components.v1 as components
 
 
@@ -51,4 +52,7 @@ def mount_browser_cleanup_listener(api_base_url: str, session_id: str) -> None:
       }})();
     </script>
     """
-    components.html(script, height=0, width=0)
+    if hasattr(st, "html"):
+      st.html(script)
+    else:
+      components.html(script, height=0, width=0)
