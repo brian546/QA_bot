@@ -98,7 +98,6 @@ def render_llm_controls(runtime_config: dict[str, Any], current: dict[str, Any])
         model = st.selectbox(
             "Model",
             options=available_models,
-            index=max(0, available_models.index(normalized["model"])) if normalized["model"] in available_models else 0,
             key=model_key,
             help="Choose from backend-approved OpenRouter models for this session.",
         )

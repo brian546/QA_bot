@@ -60,17 +60,33 @@ def main() -> None:
     if backend_sessions:
         for session in backend_sessions:
             session_id = str(session.get("session_id", ""))
-            if st.sidebar.button(
-                build_session_label(session),
-                key=f"session-switch-{session_id}",
-                use_container_width=True,
-                disabled=session_id == st.session_state.session_id,
-            ):
-                try:
-                    switch_session_state(client, session_id)
-                    st.rerun()
-                except requests.RequestException as exc:
-                    st.sidebar.error(f"Failed to switch session: {exc}")
+            is_active = session_id == st.session_state.session_id
+            col_switch, col_del = st.sidebar.columns([5, 1])
+            with col_switch:
+                if st.button(
+                    build_session_label(session),
+                    key=f"session-switch-{session_id}",
+                    use_container_width=True,
+                    disabled=is_active,
+                ):
+                    try:
+                        switch_session_state(client, session_id)
+                        st.rerun()
+                    except requests.RequestException as exc:
+                        st.sidebar.error(f"Failed to switch session: {exc}")
+            with col_del:
+                if st.button(
+                    "🗑",
+                    key=f"session-delete-{session_id}",
+                    help="Delete this session",
+                ):
+                    try:
+                        client.clear_session(session_id)
+                        if is_active:
+                            clear_session_state(client)
+                        st.rerun()
+                    except requests.RequestException as exc:
+                        st.sidebar.error(f"Failed to delete session: {exc}")
     else:
         st.sidebar.caption("No sessions stored in backend yet.")
 
