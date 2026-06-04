@@ -67,19 +67,6 @@ class GraphNodes:
         state["effective_llm_settings"] = llm_settings
         return state
 
-    def answer_direct(self, state: GraphState) -> GraphState:
-        answer, confidence = answer_directly(
-            self.settings,
-            state.get("current_question", ""),
-            state.get("chat_history", []),
-            state.get("effective_llm_settings", {}),
-        )
-        state["final_answer"] = answer
-        state["confidence"] = confidence
-        state["citations"] = []
-        state["retrieval_diagnostics"] = {"lexical_hits": [], "semantic_hits": [], "fused_hits": []}
-        return state
-
     def lexical_retrieve(self, state: GraphState) -> GraphState:
         session = self.session_store.get_or_create(state["session_id"])
         query = state.get("rewritten_query") or state.get("current_question", "")
@@ -120,6 +107,19 @@ class GraphNodes:
         return state
 
     def answer_question(self, state: GraphState) -> GraphState:
+        if state.get("route_decision") == "direct":
+            answer, confidence = answer_directly(
+                self.settings,
+                state.get("current_question", ""),
+                state.get("chat_history", []),
+                state.get("effective_llm_settings", {}),
+            )
+            state["final_answer"] = answer
+            state["confidence"] = confidence
+            state["citations"] = []
+            state["retrieval_diagnostics"] = {"lexical_hits": [], "semantic_hits": [], "fused_hits": []}
+            return state
+
         answer, citations, confidence = answer_with_evidence(
             self.settings,
             state.get("current_question", ""),

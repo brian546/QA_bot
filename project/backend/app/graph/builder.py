@@ -17,7 +17,6 @@ def build_graph(settings: Settings, session_store: InMemorySessionStore):
     graph.add_node("ingest_upload", nodes.ingest_upload)
     graph.add_node("query_router", nodes.query_router)
     graph.add_node("rewrite_query", nodes.rewrite_query)
-    graph.add_node("answer_direct", nodes.answer_direct)
     graph.add_node("lexical_retrieve", nodes.lexical_retrieve)
     graph.add_node("semantic_retrieve", nodes.semantic_retrieve)
     graph.add_node("fuse_results", nodes.fuse_results)
@@ -40,11 +39,10 @@ def build_graph(settings: Settings, session_store: InMemorySessionStore):
         route_after_query_router,
         {
             "rewrite_query": "rewrite_query",
-            "answer_direct": "answer_direct",
+            "answer_question": "answer_question",
         },
     )
 
-    graph.add_edge("answer_direct", END)
     graph.add_edge("rewrite_query", "lexical_retrieve")
     graph.add_edge("lexical_retrieve", "semantic_retrieve")
     graph.add_edge("semantic_retrieve", "fuse_results")

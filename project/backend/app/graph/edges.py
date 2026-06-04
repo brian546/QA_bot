@@ -10,7 +10,7 @@ def route_after_ingest(state: GraphState) -> str:
 def route_after_query_router(state: GraphState) -> str:
     if state.get("needs_document_search"):
         return "rewrite_query"
-    return "answer_direct"
+    return "answer_question"
 
 
 def route_after_evaluate(state: GraphState) -> str:
