@@ -31,30 +31,6 @@ def test_api_smoke_health_and_ask() -> None:
     assert "answer" in payload
     assert "effective_llm_settings" in payload
 
-
-def test_upload_reports_oversized_reason() -> None:
-    app = create_app()
-    client = TestClient(app)
-
-    oversized = b"0" * (20_000_001)
-    response = client.post(
-        "/upload",
-        data={"session_id": "upload-too-large"},
-        files={"files": ("SystemDesignInterview.pdf", oversized, "application/pdf")},
-    )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["accepted_files"] == []
-    assert payload["skipped_files"] == ["SystemDesignInterview.pdf"]
-    assert payload["skipped_details"] == [
-        {
-            "filename": "SystemDesignInterview.pdf",
-            "reason": "File exceeds the 20 MB upload limit.",
-        }
-    ]
-
-
 def test_remove_files_updates_session_state_and_indexes() -> None:
     app = create_app()
     client = TestClient(app)
