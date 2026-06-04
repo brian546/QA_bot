@@ -20,6 +20,7 @@ from project.frontend.utils import (
     ensure_state,
     handle_uploader_change,
     reset_llm_settings_to_defaults,
+    start_new_session_state,
     switch_session_state,
 )
 
@@ -90,13 +91,13 @@ def main() -> None:
     else:
         st.sidebar.caption("No sessions stored in backend yet.")
 
-    if st.sidebar.button("Clear session", use_container_width=True):
+    if st.sidebar.button("New session", use_container_width=True):
         try:
-            clear_session_state(client)
-            st.sidebar.success("Session cleared.")
+            start_new_session_state(client)
+            st.sidebar.success("Started a new session.")
             st.rerun()
         except requests.RequestException as exc:
-            st.sidebar.error(f"Clear-session failed: {exc}")
+            st.sidebar.error(f"New-session failed: {exc}")
 
     llm_settings, reset_clicked = render_llm_controls(
         st.session_state.runtime_config,

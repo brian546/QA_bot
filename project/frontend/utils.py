@@ -154,11 +154,8 @@ def reset_llm_settings_to_defaults() -> None:
     )
 
 
-def clear_session_state(client: APIClient) -> None:
-    """Clear frontend state and trigger backend session cleanup."""
-    old_session_id = st.session_state.session_id
-    client.clear_session(old_session_id)
-
+def start_new_session_state(client: APIClient) -> None:
+    """Start a fresh frontend session without deleting backend session data."""
     st.session_state.messages = []
     st.session_state.processed_files = set()
     st.session_state.uploaded_docs = []
@@ -175,6 +172,13 @@ def clear_session_state(client: APIClient) -> None:
     }
     st.session_state.runtime_config = client.get_config()
     reset_llm_settings_to_defaults()
+
+
+def clear_session_state(client: APIClient) -> None:
+    """Clear frontend state and trigger backend session cleanup."""
+    old_session_id = st.session_state.session_id
+    client.clear_session(old_session_id)
+    start_new_session_state(client)
 
 
 def switch_session_state(client: APIClient, session_id: str) -> None:
