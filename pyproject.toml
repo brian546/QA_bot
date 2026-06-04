@@ -24,7 +24,12 @@ dependencies = [
     "langchain-openrouter>=0.1",
     "langchain-community>=0.2",
     "langchain-text-splitters>=0.2",
-    "faiss-cpu==1.8.0; sys_platform == 'darwin'",
+    # macOS: keep legacy pin for older Python versions to match available wheels,
+    # but allow newer Python (>=3.14) on mac to install a newer faiss-cpu that
+    # provides wheels for the newer Python ABI. Do not change non-mac cases.
+    "faiss-cpu==1.8.0; sys_platform == 'darwin' and python_version < '3.14'",
+    # Restrict darwin + Python >=3.14 to arm64 only where compatible macOS wheels exist.
+    "faiss-cpu>=1.11; sys_platform == 'darwin' and python_version >= '3.14' and platform_machine == 'arm64'",
     "faiss-cpu>=1.8; sys_platform != 'darwin'",
     "rank-bm25>=0.2",
     "reportlab>=4.2",
@@ -33,3 +38,6 @@ dependencies = [
 
 [tool.uv]
 package = false
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+]
