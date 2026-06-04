@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
+from project.backend.app.schemas.request import RemoveFilesRequest
+from project.backend.app.schemas.response import RemoveFilesResponse
 from project.backend.app.schemas.response import UploadResponse
 from project.backend.app.services.chunking import chunk_pages
 from project.backend.app.services.dedupe import normalize_file_key
@@ -83,4 +85,61 @@ async def upload_files(
         skipped_files=skipped_files,
         skipped_details=skipped_details,
         uploaded_documents=session.uploaded_documents,
+    )
+
+
+@router.post("/upload/remove", response_model=RemoveFilesResponse)
+def remove_files(payload: RemoveFilesRequest, request: Request) -> RemoveFilesResponse:
+    settings = request.app.state.settings
+    store = request.app.state.session_store
+    session = store.get_or_create(payload.session_id)
+
+    removed_files: list[str] = []
+    skipped_files: list[str] = []
+    skipped_details: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    def mark_skipped(file_key: str, reason: str) -> None:
+        skipped_files.append(file_key)
+        skipped_details.append({"filename": file_key, "reason": reason})
+
+    for raw_key in payload.file_keys:
+        key = normalize_file_key(raw_key)
+        if not key:
+            mark_skipped(str(raw_key), "Invalid file key.")
+            continue
+        if key in seen:
+            mark_skipped(key, "Duplicate key in remove request.")
+            continue
+        seen.add(key)
+
+        if key not in session.processed_files:
+            mark_skipped(key, "File does not exist in this session.")
+            continue
+
+        session.processed_files.discard(key)
+        session.uploaded_documents = [
+            doc
+            for doc in session.uploaded_documents
+            if normalize_file_key(str(doc.get("normalized_key") or doc.get("filename", ""))) != key
+        ]
+        session.chunks = [
+            chunk
+            for chunk in session.chunks
+            if normalize_file_key(str(chunk.get("filename", ""))) != key
+        ]
+        removed_files.append(key)
+
+    lexical_index, lexical_tokens = build_bm25_index(session.chunks)
+    session.lexical_index = lexical_index
+    session.lexical_tokens = lexical_tokens
+    session.semantic_index = build_faiss_index(session.chunks, settings.embedding_dimension)
+
+    return RemoveFilesResponse(
+        session_id=payload.session_id,
+        removed_files=removed_files,
+        skipped_files=skipped_files,
+        skipped_details=skipped_details,
+        uploaded_documents=session.uploaded_documents,
+        processed_files=sorted(session.processed_files),
     )

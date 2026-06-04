@@ -32,6 +32,15 @@ class APIClient:
         response.raise_for_status()
         return response.json()
 
+    def remove_files(self, session_id: str, file_keys: list[str]) -> dict[str, Any]:
+        response = requests.post(
+            f"{self.base_url}/upload/remove",
+            json={"session_id": session_id, "file_keys": file_keys},
+            timeout=60,
+        )
+        response.raise_for_status()
+        return response.json()
+
     def ask(
         self,
         session_id: str,

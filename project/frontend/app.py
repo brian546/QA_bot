@@ -18,7 +18,7 @@ from project.frontend.utils import (
     DEFAULT_BACKEND_URL,
     clear_session_state,
     ensure_state,
-    process_new_uploads,
+    handle_uploader_change,
     reset_llm_settings_to_defaults,
     switch_session_state,
 )
@@ -91,20 +91,27 @@ def main() -> None:
         reset_llm_settings_to_defaults()
         st.rerun()
 
-    uploads = st.file_uploader(
+    uploader_state_key = f"uploader_files_{st.session_state.uploader_key}"
+    st.file_uploader(
         "Upload PDF files",
         type=["pdf"],
         accept_multiple_files=True,
-        key=f"uploader_{st.session_state.uploader_key}",
+        key=uploader_state_key,
+        on_change=handle_uploader_change,
+        args=(client, uploader_state_key),
     )
 
-    accepted, skipped = process_new_uploads(client, uploads or [])
-    if accepted:
-        st.success(f"Processed: {', '.join(accepted)}")
-    if skipped:
+    feedback = st.session_state.upload_feedback
+    if feedback.get("accepted"):
+        st.success(f"Processed: {', '.join(feedback['accepted'])}")
+    if feedback.get("removed"):
+        st.info(f"Removed: {', '.join(feedback['removed'])}")
+    if feedback.get("skipped"):
         st.warning("Skipped files:")
-        for item in skipped:
+        for item in feedback["skipped"]:
             st.write(f"- {item}")
+    if feedback.get("error"):
+        st.error(str(feedback["error"]))
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):

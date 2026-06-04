@@ -19,6 +19,15 @@ class UploadResponse(BaseModel):
     uploaded_documents: list[dict[str, Any]]
 
 
+class RemoveFilesResponse(BaseModel):
+    session_id: str
+    removed_files: list[str]
+    skipped_files: list[str]
+    skipped_details: list[dict[str, str]]
+    uploaded_documents: list[dict[str, Any]]
+    processed_files: list[str]
+
+
 class AskResponse(BaseModel):
     answer: str
     citations: list[dict[str, Any]]

@@ -27,6 +27,11 @@ class UploadRequestMeta(BaseModel):
     session_id: str = Field(min_length=1)
 
 
+class RemoveFilesRequest(BaseModel):
+    session_id: str = Field(min_length=1)
+    file_keys: list[str] = Field(min_length=1)
+
+
 class AskDiagnostics(BaseModel):
     lexical_hits: list[dict[str, Any]]
     semantic_hits: list[dict[str, Any]]
