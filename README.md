@@ -115,6 +115,8 @@ Defaults are backend-provided and optimized for grounded QA (low randomness).
 uv sync
 ```
 
+On macOS, dependency markers pin `faiss-cpu` to `1.8.0` for wheel compatibility.
+
 2. Create environment file and set API key.
 
 ```bash

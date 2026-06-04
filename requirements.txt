@@ -13,7 +13,8 @@ langgraph>=0.2
 langchain-openrouter>=0.1
 langchain-community>=0.2
 langchain-text-splitters>=0.2
-faiss-cpu>=1.8
+faiss-cpu==1.8.0; sys_platform == 'darwin'
+faiss-cpu>=1.8; sys_platform != 'darwin'
 rank-bm25>=0.2
 reportlab>=4.2
 pytest>=8.0
