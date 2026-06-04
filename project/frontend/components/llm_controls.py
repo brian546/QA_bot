@@ -16,8 +16,8 @@ def _align_slider_value(value: float, min_value: float, max_value: float, step: 
     return min(max(aligned, min_value), max_value)
 
 
-def _sync_widget_value(key: str, value: Any) -> None:
-    if st.session_state.get(key) != value:
+def _sync_widget_value(key: str, value: Any, *, force: bool = False) -> None:
+    if force or key not in st.session_state:
         st.session_state[key] = value
 
 
@@ -80,17 +80,50 @@ def render_llm_controls(runtime_config: dict[str, Any], current: dict[str, Any])
     """Render dynamic model controls from backend-provided runtime config."""
     constraints = runtime_config.get("parameter_constraints", {})
     available_models = runtime_config.get("available_models", [])
-    normalized = normalize_llm_settings(runtime_config, current)
 
     model_key = "llm_model_control"
     temperature_key = "llm_temperature_control"
     top_p_key = "llm_top_p_control"
     max_tokens_key = "llm_max_tokens_control"
 
-    _sync_widget_value(model_key, normalized["model"])
-    _sync_widget_value(temperature_key, normalized["temperature"])
-    _sync_widget_value(top_p_key, normalized["top_p"])
-    _sync_widget_value(max_tokens_key, normalized["max_tokens"])
+    # Respect any existing widget values from prior reruns so user interactions persist.
+    effective_current = dict(current or {})
+    if model_key in st.session_state:
+        effective_current["model"] = st.session_state[model_key]
+    if temperature_key in st.session_state:
+        effective_current["temperature"] = st.session_state[temperature_key]
+    if top_p_key in st.session_state:
+        effective_current["top_p"] = st.session_state[top_p_key]
+    if max_tokens_key in st.session_state:
+        effective_current["max_tokens"] = st.session_state[max_tokens_key]
+
+    normalized = normalize_llm_settings(runtime_config, effective_current)
+
+    current_model = st.session_state.get(model_key)
+    current_temperature = st.session_state.get(temperature_key)
+    current_top_p = st.session_state.get(top_p_key)
+    current_max_tokens = st.session_state.get(max_tokens_key)
+
+    _sync_widget_value(
+        model_key,
+        normalized["model"],
+        force=bool(available_models) and current_model not in available_models,
+    )
+    _sync_widget_value(
+        temperature_key,
+        normalized["temperature"],
+        force=current_temperature is not None and float(current_temperature) != float(normalized["temperature"]),
+    )
+    _sync_widget_value(
+        top_p_key,
+        normalized["top_p"],
+        force=current_top_p is not None and float(current_top_p) != float(normalized["top_p"]),
+    )
+    _sync_widget_value(
+        max_tokens_key,
+        normalized["max_tokens"],
+        force=current_max_tokens is not None and int(current_max_tokens) != int(normalized["max_tokens"]),
+    )
 
     with st.sidebar.expander("LLM behavior controls", expanded=False):
         st.caption("Grounded QA works best with low temperature and conservative sampling.")
@@ -143,4 +176,4 @@ def render_llm_controls(runtime_config: dict[str, Any], current: dict[str, Any])
         "top_p": top_p,
         "max_tokens": max_tokens,
     }
-    return new_settings, reset_clicked
+    return normalize_llm_settings(runtime_config, new_settings), reset_clicked
