@@ -84,24 +84,12 @@ def main() -> None:
         with st.chat_message("assistant"):
             with st.spinner("Retrieving evidence and generating grounded answer..."):
                 try:
-                    response = requests.post(
-                                f"http://localhost:8000/ask",
-                                json={
-                                    "session_id": st.session_state.session_id,
-                                    "question": question,
-                                    "chat_history": build_chat_history(st.session_state.messages[:-1]),
-                                    "llm_settings": st.session_state.llm_settings,
-                                },
-                                timeout=120,
-                            )
-                    response.raise_for_status()
-                    response = response.json()
-                    # response = client.ask(
-                    #     session_id=st.session_state.session_id,
-                    #     question=question,
-                    #     chat_history=build_chat_history(st.session_state.messages[:-1]),
-                    #     llm_settings=st.session_state.llm_settings,
-                    # )
+                    response = client.ask(
+                        session_id=st.session_state.session_id,
+                        question=question,
+                        chat_history=build_chat_history(st.session_state.messages[:-1]),
+                        llm_settings=st.session_state.llm_settings,
+                    )
                 except requests.RequestException as exc:
                     st.error(f"Ask failed: {exc}")
                     return
