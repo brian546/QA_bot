@@ -148,10 +148,13 @@ def handle_uploader_change(client: APIClient, uploader_state_key: str) -> None:
 
 
 def reset_llm_settings_to_defaults() -> None:
-    st.session_state.llm_settings = normalize_llm_settings(
+    defaults = normalize_llm_settings(
         st.session_state.runtime_config,
         initialize_llm_settings_from_runtime(st.session_state.runtime_config),
     )
+    st.session_state.llm_settings = defaults
+    # Defer widget key updates until the next rerun before controls are instantiated.
+    st.session_state["llm_reset_requested"] = True
 
 
 def start_new_session_state(client: APIClient) -> None:

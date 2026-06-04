@@ -86,16 +86,29 @@ def render_llm_controls(runtime_config: dict[str, Any], current: dict[str, Any])
     top_p_key = "llm_top_p_control"
     max_tokens_key = "llm_max_tokens_control"
 
-    # Respect any existing widget values from prior reruns so user interactions persist.
-    effective_current = dict(current or {})
-    if model_key in st.session_state:
-        effective_current["model"] = st.session_state[model_key]
-    if temperature_key in st.session_state:
-        effective_current["temperature"] = st.session_state[temperature_key]
-    if top_p_key in st.session_state:
-        effective_current["top_p"] = st.session_state[top_p_key]
-    if max_tokens_key in st.session_state:
-        effective_current["max_tokens"] = st.session_state[max_tokens_key]
+    reset_requested = bool(st.session_state.get("llm_reset_requested", False))
+    if reset_requested:
+        defaults = normalize_llm_settings(
+            runtime_config,
+            initialize_llm_settings_from_runtime(runtime_config),
+        )
+        _sync_widget_value(model_key, defaults["model"], force=True)
+        _sync_widget_value(temperature_key, defaults["temperature"], force=True)
+        _sync_widget_value(top_p_key, defaults["top_p"], force=True)
+        _sync_widget_value(max_tokens_key, defaults["max_tokens"], force=True)
+        st.session_state["llm_reset_requested"] = False
+        effective_current = defaults
+    else:
+        # Respect any existing widget values from prior reruns so user interactions persist.
+        effective_current = dict(current or {})
+        if model_key in st.session_state:
+            effective_current["model"] = st.session_state[model_key]
+        if temperature_key in st.session_state:
+            effective_current["temperature"] = st.session_state[temperature_key]
+        if top_p_key in st.session_state:
+            effective_current["top_p"] = st.session_state[top_p_key]
+        if max_tokens_key in st.session_state:
+            effective_current["max_tokens"] = st.session_state[max_tokens_key]
 
     normalized = normalize_llm_settings(runtime_config, effective_current)
 
