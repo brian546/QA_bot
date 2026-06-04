@@ -98,21 +98,6 @@ Session-scoped controls (rendered dynamically from backend config):
 
 Defaults are backend-provided and optimized for grounded QA (low randomness).
 
-## Clear Session and Browser-Close Cleanup
-
-Clear session button:
-
-1. Calls `POST /clear-session` for current session_id.
-2. Clears Streamlit chat/doc/retrieval/LLM state.
-3. Increments uploader key to visually reset file uploader.
-4. Creates a fresh session_id.
-5. Restores backend defaults for LLM controls.
-
-Browser-exit cleanup:
-
-- Frontend mounts JS listeners for `visibilitychange` and `pagehide`.
-- Uses `navigator.sendBeacon()` to post to `POST /clear-session`.
-- Cleanup is best-effort only; explicit Clear session is the reliable reset path.
 
 ## API Endpoints
 
