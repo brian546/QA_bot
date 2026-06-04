@@ -24,23 +24,29 @@ async def upload_files(
 
     accepted_files: list[str] = []
     skipped_files: list[str] = []
+    skipped_details: list[dict[str, str]] = []
     batch_seen: set[str] = set()
     new_chunks: list[dict[str, object]] = []
+
+    def mark_skipped(file_name: str, reason: str) -> None:
+        skipped_files.append(file_name)
+        skipped_details.append({"filename": file_name, "reason": reason})
 
     for file in files:
         file_name = file.filename or ""
         key = normalize_file_key(file_name)
         if not key.endswith(".pdf"):
-            skipped_files.append(file_name)
+            mark_skipped(file_name, "Only PDF files are supported.")
             continue
 
         if key in session.processed_files or key in batch_seen:
-            skipped_files.append(file_name)
+            mark_skipped(file_name, "File already exists in this session.")
             continue
 
         raw = await file.read()
         if len(raw) > settings.max_upload_bytes:
-            skipped_files.append(file_name)
+            limit_mb = settings.max_upload_bytes / 1_000_000
+            mark_skipped(file_name, f"File exceeds the {limit_mb:.0f} MB upload limit.")
             continue
 
         try:
@@ -75,5 +81,6 @@ async def upload_files(
         session_id=session_id,
         accepted_files=accepted_files,
         skipped_files=skipped_files,
+        skipped_details=skipped_details,
         uploaded_documents=session.uploaded_documents,
     )

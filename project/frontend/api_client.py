@@ -60,3 +60,13 @@ class APIClient:
         )
         response.raise_for_status()
         return response.json()
+
+    def list_sessions(self) -> dict[str, Any]:
+        response = requests.get(f"{self.base_url}/sessions", timeout=20)
+        response.raise_for_status()
+        return response.json()
+
+    def get_session(self, session_id: str) -> dict[str, Any]:
+        response = requests.get(f"{self.base_url}/sessions/{session_id}", timeout=20)
+        response.raise_for_status()
+        return response.json()

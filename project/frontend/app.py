@@ -20,11 +20,20 @@ from project.frontend.utils import (
     ensure_state,
     process_new_uploads,
     reset_llm_settings_to_defaults,
+    switch_session_state,
 )
 
 
 def build_chat_history(messages: list[dict[str, str]]) -> list[dict[str, str]]:
     return [{"role": m["role"], "content": m["content"]} for m in messages]
+
+
+def build_session_label(session: dict[str, object]) -> str:
+    session_id = str(session.get("session_id", ""))
+    short_id = session_id if len(session_id) <= 12 else f"{session_id[:8]}...{session_id[-4:]}"
+    doc_count = int(session.get("uploaded_document_count", 0))
+    chat_count = int(session.get("chat_message_count", 0))
+    return f"{short_id} ({doc_count} docs, {chat_count} msgs)"
 
 
 def main() -> None:
@@ -40,7 +49,31 @@ def main() -> None:
         st.error(f"Failed to load runtime config from backend: {exc}")
         st.stop()
 
+    try:
+        backend_sessions = client.list_sessions().get("sessions", [])
+    except requests.RequestException as exc:
+        backend_sessions = []
+        st.sidebar.error(f"Failed to load backend sessions: {exc}")
+
     st.sidebar.markdown(f"Session: `{st.session_state.session_id}`")
+    st.sidebar.subheader("Stored sessions")
+    if backend_sessions:
+        for session in backend_sessions:
+            session_id = str(session.get("session_id", ""))
+            if st.sidebar.button(
+                build_session_label(session),
+                key=f"session-switch-{session_id}",
+                use_container_width=True,
+                disabled=session_id == st.session_state.session_id,
+            ):
+                try:
+                    switch_session_state(client, session_id)
+                    st.rerun()
+                except requests.RequestException as exc:
+                    st.sidebar.error(f"Failed to switch session: {exc}")
+    else:
+        st.sidebar.caption("No sessions stored in backend yet.")
+
     if st.sidebar.button("Clear session", use_container_width=True):
         try:
             clear_session_state(client)
@@ -69,7 +102,9 @@ def main() -> None:
     if accepted:
         st.success(f"Processed: {', '.join(accepted)}")
     if skipped:
-        st.info(f"Skipped duplicates or invalid files: {', '.join(skipped)}")
+        st.warning("Skipped files:")
+        for item in skipped:
+            st.write(f"- {item}")
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):

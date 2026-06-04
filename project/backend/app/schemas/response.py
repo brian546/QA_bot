@@ -15,6 +15,7 @@ class UploadResponse(BaseModel):
     session_id: str
     accepted_files: list[str]
     skipped_files: list[str]
+    skipped_details: list[dict[str, str]]
     uploaded_documents: list[dict[str, Any]]
 
 
@@ -29,6 +30,24 @@ class AskResponse(BaseModel):
 class ClearSessionResponse(BaseModel):
     session_id: str
     cleared: bool
+
+
+class SessionSummary(BaseModel):
+    session_id: str
+    uploaded_document_count: int
+    chat_message_count: int
+
+
+class SessionListResponse(BaseModel):
+    sessions: list[SessionSummary]
+
+
+class SessionDetailResponse(BaseModel):
+    session_id: str
+    uploaded_documents: list[dict[str, Any]]
+    chat_history: list[dict[str, str]]
+    processed_files: list[str]
+    llm_settings: dict[str, Any]
 
 
 class RuntimeConfigResponse(BaseModel):

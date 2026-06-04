@@ -30,7 +30,7 @@ def build_runtime_config(settings: Settings) -> dict[str, Any]:
             "max_tokens": {
                 "min": settings.llm_min_max_tokens,
                 "max": settings.llm_hard_max_tokens,
-                "step": 64,
+                "step": 1,
             },
         },
         "recommended_defaults": settings.default_llm_settings(),

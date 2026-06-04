@@ -41,6 +41,10 @@ class InMemorySessionStore:
         with self._lock:
             return self._sessions.get(session_id)
 
+    def list_sessions(self) -> list[SessionData]:
+        with self._lock:
+            return list(reversed(list(self._sessions.values())))
+
     def clear(self, session_id: str) -> bool:
         with self._lock:
             return self._sessions.pop(session_id, None) is not None
