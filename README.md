@@ -13,6 +13,44 @@ Production-friendly MVP for grounded multi-document question answering using Fas
 - Clear session resets both frontend and backend session state.
 - Browser-close cleanup is best-effort using beacon events.
 
+## Local Setup and Run
+
+1. Install dependencies.
+
+```bash
+uv sync
+```
+
+On macOS, need to install `faiss-cpu` separately due to `uv` constraints:
+
+```bash
+uv pip install faiss-cpu
+```
+
+2. Create environment file and set API key.
+
+```bash
+cp .env.example .env
+```
+
+3. Run FastAPI backend.
+
+```bash
+uv run uvicorn project.backend.app.main:app --reload --port 8000
+```
+
+4. Run Streamlit frontend.
+
+```bash
+uv run streamlit run project/frontend/app.py --server.port 8511
+```
+
+5. Run tests.
+
+```bash
+uv run pytest project/tests -q
+```
+
 ## Project Structure
 
 - `project/backend/app/main.py`
@@ -105,44 +143,6 @@ Defaults are backend-provided and optimized for grounded QA (low randomness).
 - `POST /upload`
 - `POST /ask`
 - `POST /clear-session`
-
-## Local Setup and Run
-
-1. Install dependencies.
-
-```bash
-uv sync
-```
-
-On macOS, need to install `faiss-cpu` separately due to `uv` constraints: 
-
-```bash
-uv pip install faiss-cpu
-```
-
-2. Create environment file and set API key.
-
-```bash
-cp .env.example .env
-```
-
-3. Run FastAPI backend.
-
-```bash
-uv run uvicorn project.backend.app.main:app --reload --port 8000
-```
-
-4. Run Streamlit frontend.
-
-```bash
-uv run streamlit run project/frontend/app.py --server.port 8511
-```
-
-5. Run tests.
-
-```bash
-uv run pytest project/tests -q
-```
 
 ## Why Hybrid Retrieval?
 
