@@ -158,19 +158,17 @@ def main() -> None:
             st.session_state.messages.append({"role": "assistant", "content": answer})
             st.session_state.citations = response.get("citations", [])
             st.session_state.retrieval_diagnostics = response.get("retrieval_diagnostics", {})
+            citations = response.get("citations", [])
 
-            with st.expander("Citations", expanded=True):
-                citations = response.get("citations", [])
-                if citations:
+            if citations:
+                with st.expander("Citations"):
                     for cite in citations:
                         st.write(
                             f"- {cite.get('filename')} page {cite.get('page')} chunk {cite.get('chunk_id')}"
                         )
-                else:
-                    st.caption("No citations returned.")
 
-            with st.expander("Retrieval diagnostics", expanded=False):
-                st.json(response.get("retrieval_diagnostics", {}))
+                with st.expander("Retrieval diagnostics", expanded=False):
+                    st.json(response.get("retrieval_diagnostics", {}))
 
             with st.expander("Effective LLM settings", expanded=False):
                 st.json(response.get("effective_llm_settings", {}))
