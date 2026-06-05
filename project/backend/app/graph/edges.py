@@ -3,9 +3,6 @@ from __future__ import annotations
 from project.backend.app.graph.state import GraphState
 
 
-def route_after_ingest(state: GraphState) -> str:
-    return "query_router"
-
 
 def route_after_query_router(state: GraphState) -> str:
     if state.get("needs_document_search"):

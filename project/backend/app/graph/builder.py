@@ -4,7 +4,7 @@ from langgraph.graph import END, START, StateGraph
 
 from project.backend.app.core.config import Settings
 from project.backend.app.core.session_store import InMemorySessionStore
-from project.backend.app.graph.edges import route_after_evaluate, route_after_ingest, route_after_query_router
+from project.backend.app.graph.edges import route_after_evaluate, route_after_query_router
 from project.backend.app.graph.nodes import GraphNodes
 from project.backend.app.graph.state import GraphState
 
@@ -26,13 +26,7 @@ def build_graph(settings: Settings, session_store: InMemorySessionStore):
     graph.add_node("fallback", nodes.fallback)
 
     graph.add_edge(START, "ingest_upload")
-    graph.add_conditional_edges(
-        "ingest_upload",
-        route_after_ingest,
-        {
-            "query_router": "query_router",
-        },
-    )
+    graph.add_edge("ingest_upload", "query_router")
 
     graph.add_conditional_edges(
         "query_router",
