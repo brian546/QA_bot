@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
     openrouter_model: str = Field(alias="OPENROUTER_MODEL")
     openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1", alias="OPENROUTER_BASE_URL")
+    openrouter_embedding_model: str = Field(
+        default="nvidia/llama-nemotron-embed-vl-1b-v2:free",
+        alias="OPENROUTER_EMBEDDING_MODEL",
+    )
     openrouter_allowed_models_raw: str = Field(default="", alias="OPENROUTER_ALLOWED_MODELS")
     openrouter_timeout: int = Field(default=45, alias="OPENROUTER_TIMEOUT")
     openrouter_max_retries: int = Field(default=1, alias="OPENROUTER_MAX_RETRIES")

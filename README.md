@@ -112,7 +112,7 @@ Routing:
 ## Hybrid Retrieval
 
 - Lexical retrieval: BM25 over chunk text for sparse exact-match strength.
-- Semantic retrieval: LangChain embeddings with FAISS vector store.
+- Semantic retrieval: OpenRouter embeddings (`nvidia/llama-nemotron-embed-vl-1b-v2:free`) with FAISS vector store.
 - Fusion: weighted reciprocal rank fusion.
 - Diagnostics include top lexical, semantic, and fused hit summaries.
 
