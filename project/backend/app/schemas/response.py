@@ -14,16 +14,12 @@ class HealthResponse(BaseModel):
 class UploadResponse(BaseModel):
     session_id: str
     accepted_files: list[str]
-    skipped_files: list[str]
-    skipped_details: list[dict[str, str]]
     uploaded_documents: list[dict[str, Any]]
 
 
 class RemoveFilesResponse(BaseModel):
     session_id: str
     removed_files: list[str]
-    skipped_files: list[str]
-    skipped_details: list[dict[str, str]]
     uploaded_documents: list[dict[str, Any]]
     processed_files: list[str]
 

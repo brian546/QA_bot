@@ -58,7 +58,6 @@ def test_remove_files_updates_session_state_and_indexes() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["removed_files"] == ["alpha.pdf"]
-    assert payload["skipped_files"] == ["missing.pdf"]
     assert payload["processed_files"] == ["beta.pdf"]
     assert payload["uploaded_documents"] == [
         {"filename": "Beta.pdf", "normalized_key": "beta.pdf", "page_count": 1, "chunk_count": 1}

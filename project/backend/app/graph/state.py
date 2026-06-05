@@ -7,7 +7,6 @@ class GraphState(TypedDict, total=False):
     session_id: str
     uploaded_files: list[str]
     accepted_files: list[str]
-    skipped_files: list[str]
     uploaded_documents: list[dict[str, Any]]
     chat_history: list[dict[str, str]]
     current_question: str

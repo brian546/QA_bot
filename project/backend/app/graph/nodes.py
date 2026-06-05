@@ -29,7 +29,6 @@ class GraphNodes:
         session = self.session_store.get_or_create(state["session_id"])
         state["uploaded_documents"] = list(session.uploaded_documents)
         state.setdefault("accepted_files", [])
-        state.setdefault("skipped_files", [])
         state.setdefault("uploaded_files", [])
         return state
 

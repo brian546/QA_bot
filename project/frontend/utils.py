@@ -37,7 +37,6 @@ def ensure_state(client: APIClient) -> None:
     if "upload_feedback" not in st.session_state:
         st.session_state.upload_feedback = {
             "accepted": [],
-            "skipped": [],
             "removed": [],
             "error": "",
         }
@@ -64,33 +63,27 @@ def normalize_file_key(filename: str) -> str:
     return f"{stem}.{ext}"
 
 
-def process_new_uploads(client: APIClient, uploaded_files: list[Any]) -> tuple[list[str], list[str]]:
+def process_new_uploads(client: APIClient, uploaded_files: list[Any]) -> list[str]:
     """Process only newly uploaded files and skip duplicates in-session."""
     if not uploaded_files:
-        return [], []
+        return []
 
     new_files = []
-    locally_skipped: list[str] = []
     for file in uploaded_files:
         key = normalize_file_key(file.name)
         if key in st.session_state.processed_files:
-            locally_skipped.append(f"{file.name}: File already exists in this session.")
             continue
         new_files.append(file)
 
     if not new_files:
-        return [], locally_skipped
+        return []
 
     response = client.upload(st.session_state.session_id, new_files)
     for accepted_name in response.get("accepted_files", []):
         st.session_state.processed_files.add(normalize_file_key(accepted_name))
 
     st.session_state.uploaded_docs = response.get("uploaded_documents", [])
-    remote_skipped = [
-        f"{item.get('filename', 'Unknown file')}: {item.get('reason', 'Upload skipped.')}"
-        for item in response.get("skipped_details", [])
-    ]
-    return response.get("accepted_files", []), locally_skipped + remote_skipped
+    return response.get("accepted_files", [])
 
 
 def handle_uploader_change(client: APIClient, uploader_state_key: str) -> None:
@@ -109,7 +102,6 @@ def handle_uploader_change(client: APIClient, uploader_state_key: str) -> None:
     removed_keys = sorted(previous_keys - current_keys)
 
     accepted: list[str] = []
-    skipped: list[str] = []
     removed: list[str] = []
 
     try:
@@ -118,30 +110,21 @@ def handle_uploader_change(client: APIClient, uploader_state_key: str) -> None:
             st.session_state.uploaded_docs = remove_response.get("uploaded_documents", [])
             st.session_state.processed_files = set(remove_response.get("processed_files", []))
             removed.extend(remove_response.get("removed_files", []))
-            skipped.extend(
-                [
-                    f"{item.get('filename', 'Unknown file')}: {item.get('reason', 'Remove skipped.')}"
-                    for item in remove_response.get("skipped_details", [])
-                ]
-            )
 
         if added_keys:
             added_files = [current_files_by_key[key] for key in added_keys]
-            accepted_names, skipped_items = process_new_uploads(client, added_files)
+            accepted_names = process_new_uploads(client, added_files)
             accepted.extend(accepted_names)
-            skipped.extend(skipped_items)
 
         st.session_state.selected_file_keys = current_keys
         st.session_state.upload_feedback = {
             "accepted": accepted,
-            "skipped": skipped,
             "removed": removed,
             "error": "",
         }
     except Exception as exc:
         st.session_state.upload_feedback = {
             "accepted": accepted,
-            "skipped": skipped,
             "removed": removed,
             "error": f"Upload sync failed: {exc}",
         }
@@ -169,7 +152,6 @@ def start_new_session_state(client: APIClient) -> None:
     st.session_state.selected_file_keys = set()
     st.session_state.upload_feedback = {
         "accepted": [],
-        "skipped": [],
         "removed": [],
         "error": "",
     }
@@ -198,7 +180,6 @@ def switch_session_state(client: APIClient, session_id: str) -> None:
     st.session_state.selected_file_keys = set()
     st.session_state.upload_feedback = {
         "accepted": [],
-        "skipped": [],
         "removed": [],
         "error": "",
     }

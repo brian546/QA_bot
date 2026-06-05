@@ -72,7 +72,7 @@ uv run pytest project/tests -q
 Graph state tracks:
 
 - session_id
-- uploaded_files, accepted_files, skipped_files
+- uploaded_files, accepted_files
 - uploaded_documents
 - chat_history
 - current_question, rewritten_query

@@ -25,30 +25,20 @@ async def upload_files(
     session = store.get_or_create(session_id)
 
     accepted_files: list[str] = []
-    skipped_files: list[str] = []
-    skipped_details: list[dict[str, str]] = []
     batch_seen: set[str] = set()
     new_chunks: list[dict[str, object]] = []
-
-    def mark_skipped(file_name: str, reason: str) -> None:
-        skipped_files.append(file_name)
-        skipped_details.append({"filename": file_name, "reason": reason})
 
     for file in files:
         file_name = file.filename or ""
         key = normalize_file_key(file_name)
         if not key.endswith(".pdf"):
-            mark_skipped(file_name, "Only PDF files are supported.")
             continue
 
         if key in session.processed_files or key in batch_seen:
-            mark_skipped(file_name, "File already exists in this session.")
             continue
 
         raw = await file.read()
         if len(raw) > settings.max_upload_bytes:
-            limit_mb = settings.max_upload_bytes / 1_000_000
-            mark_skipped(file_name, f"File exceeds the {limit_mb:.0f} MB upload limit.")
             continue
 
         try:
@@ -82,8 +72,6 @@ async def upload_files(
     return UploadResponse(
         session_id=session_id,
         accepted_files=accepted_files,
-        skipped_files=skipped_files,
-        skipped_details=skipped_details,
         uploaded_documents=session.uploaded_documents,
     )
 
@@ -95,26 +83,17 @@ def remove_files(payload: RemoveFilesRequest, request: Request) -> RemoveFilesRe
     session = store.get_or_create(payload.session_id)
 
     removed_files: list[str] = []
-    skipped_files: list[str] = []
-    skipped_details: list[dict[str, str]] = []
     seen: set[str] = set()
-
-    def mark_skipped(file_key: str, reason: str) -> None:
-        skipped_files.append(file_key)
-        skipped_details.append({"filename": file_key, "reason": reason})
 
     for raw_key in payload.file_keys:
         key = normalize_file_key(raw_key)
         if not key:
-            mark_skipped(str(raw_key), "Invalid file key.")
             continue
         if key in seen:
-            mark_skipped(key, "Duplicate key in remove request.")
             continue
         seen.add(key)
 
         if key not in session.processed_files:
-            mark_skipped(key, "File does not exist in this session.")
             continue
 
         session.processed_files.discard(key)
@@ -138,8 +117,6 @@ def remove_files(payload: RemoveFilesRequest, request: Request) -> RemoveFilesRe
     return RemoveFilesResponse(
         session_id=payload.session_id,
         removed_files=removed_files,
-        skipped_files=skipped_files,
-        skipped_details=skipped_details,
         uploaded_documents=session.uploaded_documents,
         processed_files=sorted(session.processed_files),
     )

@@ -123,10 +123,6 @@ def main() -> None:
         st.success(f"Processed: {', '.join(feedback['accepted'])}")
     if feedback.get("removed"):
         st.info(f"Removed: {', '.join(feedback['removed'])}")
-    if feedback.get("skipped"):
-        st.warning("Skipped files:")
-        for item in feedback["skipped"]:
-            st.write(f"- {item}")
     if feedback.get("error"):
         st.error(str(feedback["error"]))
 
