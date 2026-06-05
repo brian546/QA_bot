@@ -27,7 +27,7 @@ On macOS, need to install `faiss-cpu` separately due to `uv` constraints:
 uv pip install faiss-cpu
 ```
 
-2. Create environment file and set API key.
+2. Create environment file and set OpenRouter API key.
 
 ```bash
 cp .env.example .env
@@ -158,3 +158,7 @@ It handles exact entities (IDs, names, policy language) while still catching sem
 - Change LLM controls and confirm effective settings in the response.
 - Click Clear session and verify uploader, chat, docs, and diagnostics reset.
 - Close or hide the tab and reopen to confirm best-effort backend cleanup behavior.
+
+## Privacy Notice
+
+⚠️ **Warning**: Do not upload PDFs containing personal, sensitive, or confidential information. This application processes documents using external APIs and may store data temporarily for session functionality. Only upload documents you are comfortable sharing with third-party services.
