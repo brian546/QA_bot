@@ -98,7 +98,6 @@ Session-scoped controls (rendered dynamically from backend config):
 
 Defaults are backend-provided and optimized for grounded QA (low randomness).
 
-
 ## API Endpoints
 
 - `GET /health`
@@ -115,7 +114,11 @@ Defaults are backend-provided and optimized for grounded QA (low randomness).
 uv sync
 ```
 
-On macOS, dependency markers pin `faiss-cpu` to `1.8.0` for wheel compatibility.
+On macOS, need to install `faiss-cpu` separately due to `uv` constraints: 
+
+```bash
+uv pip install faiss-cpu
+```
 
 2. Create environment file and set API key.
 
