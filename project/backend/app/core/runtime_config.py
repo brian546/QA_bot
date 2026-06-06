@@ -39,13 +39,13 @@ def build_runtime_config(settings: Settings) -> dict[str, Any]:
             },
             "lexical_weight": {
                 "min": 0.0,
-                "max": 2.0,
-                "step": 0.05,
+                "max": 1.0,
+                "step": 0.01,
             },
             "semantic_weight": {
                 "min": 0.0,
-                "max": 2.0,
-                "step": 0.05,
+                "max": 1.0,
+                "step": 0.01,
             },
         },
         "recommended_defaults": settings.default_llm_settings(),

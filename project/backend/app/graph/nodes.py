@@ -35,10 +35,21 @@ class GraphNodes:
         lexical_weight = float(incoming.get("lexical_weight", defaults["lexical_weight"]))
         semantic_weight = float(incoming.get("semantic_weight", defaults["semantic_weight"]))
 
-        resolved = {
-            "lexical_weight": max(0.0, min(2.0, lexical_weight)),
-            "semantic_weight": max(0.0, min(2.0, semantic_weight)),
-        }
+        lexical_weight = max(0.0, min(1.0, lexical_weight))
+        semantic_weight = max(0.0, min(1.0, semantic_weight))
+
+        total = lexical_weight + semantic_weight
+        if total <= 0:
+            resolved = {
+                "lexical_weight": 0.5,
+                "semantic_weight": 0.5,
+            }
+        else:
+            resolved = {
+                "lexical_weight": lexical_weight / total,
+                "semantic_weight": semantic_weight / total,
+            }
+
         state["effective_retrieval_settings"] = resolved
         return resolved
 
@@ -51,6 +62,7 @@ class GraphNodes:
 
     def query_router(self, state: GraphState) -> GraphState:
         llm_settings = validate_and_merge_llm_settings(self.settings, state.get("llm_settings"))
+        self._resolve_retrieval_settings(state)
         docs_available = bool(state.get("uploaded_documents"))
         needs_search = should_search_documents(
             self.settings,
@@ -100,7 +112,7 @@ class GraphNodes:
     def fuse_results(self, state: GraphState) -> GraphState:
         lexical = state.get("lexical_results", [])
         semantic = state.get("semantic_results", [])
-        retrieval_settings = self._resolve_retrieval_settings(state)
+        retrieval_settings = state.get("effective_retrieval_settings") or self._resolve_retrieval_settings(state)
         fused = reciprocal_rank_fusion(
             lexical,
             semantic,

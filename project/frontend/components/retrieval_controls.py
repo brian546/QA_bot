@@ -54,24 +54,24 @@ def normalize_retrieval_settings(
     constraints = runtime_config.get("parameter_constraints", {})
     defaults = initialize_retrieval_settings_from_runtime(runtime_config)
 
-    l_c = constraints.get("lexical_weight", {"min": 0.0, "max": 2.0, "step": 0.05})
-    s_c = constraints.get("semantic_weight", {"min": 0.0, "max": 2.0, "step": 0.05})
+    l_c = constraints.get("lexical_weight", {"min": 0.0, "max": 1.0, "step": 0.01})
+    s_c = constraints.get("semantic_weight", {"min": 0.0, "max": 1.0, "step": 0.01})
 
     return {
         "lexical_weight": float(
             _align_slider_value(
                 float(current.get("lexical_weight", defaults.get("lexical_weight", 1.0))),
                 float(l_c.get("min", 0.0)),
-                float(l_c.get("max", 2.0)),
-                float(l_c.get("step", 0.05)),
+                float(l_c.get("max", 1.0)),
+                float(l_c.get("step", 0.01)),
             )
         ),
         "semantic_weight": float(
             _align_slider_value(
                 float(current.get("semantic_weight", defaults.get("semantic_weight", 1.0))),
                 float(s_c.get("min", 0.0)),
-                float(s_c.get("max", 2.0)),
-                float(s_c.get("step", 0.05)),
+                float(s_c.get("max", 1.0)),
+                float(s_c.get("step", 0.01)),
             )
         ),
     }
@@ -99,6 +99,12 @@ def render_retrieval_controls(
 
     with st.sidebar.expander("Retrieval blend controls", expanded=False):
         st.caption("0.0 means 100% lexical. 1.0 means 100% semantic.")
+
+        st.markdown("Ranking formula (weighted reciprocal-rank fusion):")
+        st.latex(
+            r"\mathrm{score}(c)=\frac{1-b}{K+r_{\mathrm{lex}}(c)}+\frac{b}{K+r_{\mathrm{sem}}(c)}"
+        )
+        st.caption("b = blend slider (0 to 1), K = rank constant, lower rank is better.")
 
         blend_ratio = st.slider(
             "Lexical ↔ Semantic blend",
