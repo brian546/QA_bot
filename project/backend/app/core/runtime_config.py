@@ -15,7 +15,17 @@ def build_runtime_config(settings: Settings) -> dict[str, Any]:
         "available_models": settings.allowed_models(),
         "default_model": settings.openrouter_model,
         "default_llm_settings": settings.default_llm_settings(),
-        "supported_controls": ["model", "temperature", "top_p"],
+        "default_retrieval_settings": {
+            "lexical_weight": settings.lexical_weight,
+            "semantic_weight": settings.semantic_weight,
+        },
+        "supported_controls": [
+            "model",
+            "temperature",
+            "top_p",
+            "lexical_weight",
+            "semantic_weight",
+        ],
         "parameter_constraints": {
             "temperature": {
                 "min": settings.llm_min_temperature,
@@ -25,6 +35,16 @@ def build_runtime_config(settings: Settings) -> dict[str, Any]:
             "top_p": {
                 "min": settings.llm_min_top_p,
                 "max": settings.llm_max_top_p,
+                "step": 0.05,
+            },
+            "lexical_weight": {
+                "min": 0.0,
+                "max": 2.0,
+                "step": 0.05,
+            },
+            "semantic_weight": {
+                "min": 0.0,
+                "max": 2.0,
                 "step": 0.05,
             },
         },

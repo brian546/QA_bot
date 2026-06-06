@@ -22,6 +22,7 @@ class SessionData:
     chat_history: list[dict[str, str]] = field(default_factory=list)
     graph_state: dict[str, Any] = field(default_factory=dict)
     llm_settings: dict[str, Any] = field(default_factory=dict)
+    retrieval_settings: dict[str, Any] = field(default_factory=dict)
 
 
 class InMemorySessionStore:

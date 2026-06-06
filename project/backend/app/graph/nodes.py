@@ -25,6 +25,23 @@ class GraphNodes:
         self.settings = settings
         self.session_store = session_store
 
+    def _resolve_retrieval_settings(self, state: GraphState) -> dict[str, float]:
+        defaults = {
+            "lexical_weight": float(self.settings.lexical_weight),
+            "semantic_weight": float(self.settings.semantic_weight),
+        }
+        incoming = state.get("retrieval_settings") or {}
+
+        lexical_weight = float(incoming.get("lexical_weight", defaults["lexical_weight"]))
+        semantic_weight = float(incoming.get("semantic_weight", defaults["semantic_weight"]))
+
+        resolved = {
+            "lexical_weight": max(0.0, min(2.0, lexical_weight)),
+            "semantic_weight": max(0.0, min(2.0, semantic_weight)),
+        }
+        state["effective_retrieval_settings"] = resolved
+        return resolved
+
     def ingest_upload(self, state: GraphState) -> GraphState:
         session = self.session_store.get_or_create(state["session_id"])
         state["uploaded_documents"] = list(session.uploaded_documents)
@@ -83,11 +100,12 @@ class GraphNodes:
     def fuse_results(self, state: GraphState) -> GraphState:
         lexical = state.get("lexical_results", [])
         semantic = state.get("semantic_results", [])
+        retrieval_settings = self._resolve_retrieval_settings(state)
         fused = reciprocal_rank_fusion(
             lexical,
             semantic,
-            lexical_weight=self.settings.lexical_weight,
-            semantic_weight=self.settings.semantic_weight,
+            lexical_weight=retrieval_settings["lexical_weight"],
+            semantic_weight=retrieval_settings["semantic_weight"],
             top_k=max(self.settings.retrieval_lexical_k, self.settings.retrieval_semantic_k),
         )
         state["fused_results"] = fused

@@ -41,6 +41,7 @@ def get_session(session_id: str, request: Request) -> SessionDetailResponse:
         chat_history=session.chat_history,
         processed_files=sorted(session.processed_files),
         llm_settings=session.llm_settings,
+        retrieval_settings=session.retrieval_settings,
     )
 
 

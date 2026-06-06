@@ -7,6 +7,10 @@ import streamlit as st
 
 from project.frontend.api_client import APIClient
 from project.frontend.components.llm_controls import initialize_llm_settings_from_runtime, normalize_llm_settings
+from project.frontend.components.retrieval_controls import (
+    initialize_retrieval_settings_from_runtime,
+    normalize_retrieval_settings,
+)
 
 
 DEFAULT_BACKEND_URL = "http://localhost:8000"
@@ -51,6 +55,17 @@ def ensure_state(client: APIClient) -> None:
         st.session_state.llm_settings = normalize_llm_settings(
             st.session_state.runtime_config,
             st.session_state.llm_settings,
+        )
+
+    if "retrieval_settings" not in st.session_state:
+        st.session_state.retrieval_settings = normalize_retrieval_settings(
+            st.session_state.runtime_config,
+            initialize_retrieval_settings_from_runtime(st.session_state.runtime_config),
+        )
+    else:
+        st.session_state.retrieval_settings = normalize_retrieval_settings(
+            st.session_state.runtime_config,
+            st.session_state.retrieval_settings,
         )
 
 
@@ -140,6 +155,14 @@ def reset_llm_settings_to_defaults() -> None:
     st.session_state["llm_reset_requested"] = True
 
 
+def reset_retrieval_settings_to_defaults() -> None:
+    defaults = normalize_retrieval_settings(
+        st.session_state.runtime_config,
+        initialize_retrieval_settings_from_runtime(st.session_state.runtime_config),
+    )
+    st.session_state.retrieval_settings = defaults
+
+
 def start_new_session_state(client: APIClient) -> None:
     """Start a fresh frontend session without deleting backend session data."""
     st.session_state.messages = []
@@ -157,6 +180,7 @@ def start_new_session_state(client: APIClient) -> None:
     }
     st.session_state.runtime_config = client.get_config()
     reset_llm_settings_to_defaults()
+    reset_retrieval_settings_to_defaults()
 
 
 def clear_session_state(client: APIClient) -> None:
@@ -188,4 +212,8 @@ def switch_session_state(client: APIClient, session_id: str) -> None:
     st.session_state.llm_settings = normalize_llm_settings(
         runtime_config,
         session.get("llm_settings") or initialize_llm_settings_from_runtime(runtime_config),
+    )
+    st.session_state.retrieval_settings = normalize_retrieval_settings(
+        runtime_config,
+        session.get("retrieval_settings") or initialize_retrieval_settings_from_runtime(runtime_config),
     )

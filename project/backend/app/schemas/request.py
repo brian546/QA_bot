@@ -11,11 +11,17 @@ class LLMSettingsPayload(BaseModel):
     top_p: float | None = None
 
 
+class RetrievalSettingsPayload(BaseModel):
+    lexical_weight: float | None = None
+    semantic_weight: float | None = None
+
+
 class AskRequest(BaseModel):
     session_id: str = Field(min_length=1)
     question: str = Field(min_length=1)
     chat_history: list[dict[str, str]] | None = None
     llm_settings: LLMSettingsPayload | None = None
+    retrieval_settings: RetrievalSettingsPayload | None = None
 
 
 class ClearSessionRequest(BaseModel):

@@ -47,6 +47,7 @@ class APIClient:
         question: str,
         chat_history: list[dict[str, str]],
         llm_settings: dict[str, Any],
+        retrieval_settings: dict[str, Any],
     ) -> dict[str, Any]:
         response = requests.post(
             f"{self.base_url}/ask",
@@ -55,6 +56,7 @@ class APIClient:
                 "question": question,
                 "chat_history": chat_history,
                 "llm_settings": llm_settings,
+                "retrieval_settings": retrieval_settings,
             },
             timeout=120,
         )

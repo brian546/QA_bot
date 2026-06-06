@@ -14,6 +14,11 @@ for candidate in (str(REPO_ROOT), str(CURRENT_DIR)):
 
 from project.frontend.api_client import APIClient
 from project.frontend.components.llm_controls import render_llm_controls
+from project.frontend.components.retrieval_controls import (
+    initialize_retrieval_settings_from_runtime,
+    normalize_retrieval_settings,
+    render_retrieval_controls,
+)
 from project.frontend.utils import (
     DEFAULT_BACKEND_URL,
     clear_session_state,
@@ -37,6 +42,17 @@ def build_session_label(session: dict[str, object]) -> str:
     return f"{short_id} ({doc_count} docs, {chat_count} msgs)"
 
 
+def reset_retrieval_settings_locally() -> None:
+    st.session_state.retrieval_settings = normalize_retrieval_settings(
+        st.session_state.runtime_config,
+        {
+            "lexical_weight": 0.5,
+            "semantic_weight": 0.5,
+        },
+    )
+    st.session_state["retrieval_reset_requested"] = True
+
+
 def main() -> None:
     st.set_page_config(page_title="Hybrid PDF QA", layout="wide")
     st.title("Hybrid Multi-PDF QA")
@@ -49,6 +65,12 @@ def main() -> None:
     except requests.RequestException as exc:
         st.error(f"Failed to load runtime config from backend: {exc}")
         st.stop()
+
+    if "retrieval_settings" not in st.session_state:
+        st.session_state.retrieval_settings = normalize_retrieval_settings(
+            st.session_state.runtime_config,
+            initialize_retrieval_settings_from_runtime(st.session_state.runtime_config),
+        )
 
     try:
         backend_sessions = client.list_sessions().get("sessions", [])
@@ -108,6 +130,15 @@ def main() -> None:
         reset_llm_settings_to_defaults()
         st.rerun()
 
+    retrieval_settings, retrieval_reset_clicked = render_retrieval_controls(
+        st.session_state.runtime_config,
+        st.session_state.retrieval_settings,
+    )
+    st.session_state.retrieval_settings = retrieval_settings
+    if retrieval_reset_clicked:
+        reset_retrieval_settings_locally()
+        st.rerun()
+
     uploader_state_key = f"uploader_files_{st.session_state.uploader_key}"
     st.file_uploader(
         "Upload PDF files",
@@ -144,6 +175,7 @@ def main() -> None:
                         question=question,
                         chat_history=build_chat_history(st.session_state.messages[:-1]),
                         llm_settings=st.session_state.llm_settings,
+                        retrieval_settings=st.session_state.retrieval_settings,
                     )
                 except requests.RequestException as exc:
                     st.error(f"Ask failed: {exc}")
@@ -168,6 +200,9 @@ def main() -> None:
 
             with st.expander("Effective LLM settings", expanded=False):
                 st.json(response.get("effective_llm_settings", {}))
+
+            with st.expander("Effective retrieval settings", expanded=False):
+                st.json(response.get("effective_retrieval_settings", {}))
 
 
 if __name__ == "__main__":

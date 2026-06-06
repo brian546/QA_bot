@@ -30,6 +30,7 @@ class AskResponse(BaseModel):
     confidence: float
     retrieval_diagnostics: dict[str, Any]
     effective_llm_settings: dict[str, Any]
+    effective_retrieval_settings: dict[str, Any]
 
 
 class ClearSessionResponse(BaseModel):
@@ -53,6 +54,7 @@ class SessionDetailResponse(BaseModel):
     chat_history: list[dict[str, str]]
     processed_files: list[str]
     llm_settings: dict[str, Any]
+    retrieval_settings: dict[str, Any]
 
 
 class RuntimeConfigResponse(BaseModel):
@@ -60,6 +62,7 @@ class RuntimeConfigResponse(BaseModel):
     available_models: list[str]
     default_model: str
     default_llm_settings: dict[str, Any]
+    default_retrieval_settings: dict[str, Any]
     supported_controls: list[str]
     parameter_constraints: dict[str, Any]
     recommended_defaults: dict[str, Any]

@@ -21,6 +21,8 @@ class GraphState(TypedDict, total=False):
     retrieval_diagnostics: dict[str, Any]
     llm_settings: dict[str, Any]
     effective_llm_settings: dict[str, Any]
+    retrieval_settings: dict[str, Any]
+    effective_retrieval_settings: dict[str, Any]
     needs_document_search: bool
     route_decision: str
     error: str
