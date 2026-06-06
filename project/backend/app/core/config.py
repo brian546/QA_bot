@@ -30,14 +30,11 @@ class Settings(BaseSettings):
 
     llm_temperature: float = Field(default=0.0, alias="LLM_TEMPERATURE")
     llm_default_top_p: float = Field(default=0.2, alias="LLM_DEFAULT_TOP_P")
-    llm_default_max_tokens: int = Field(default=1200, alias="LLM_DEFAULT_MAX_TOKENS")
 
     llm_min_temperature: float = Field(default=0.0, alias="LLM_MIN_TEMPERATURE")
     llm_max_temperature: float = Field(default=1.0, alias="LLM_MAX_TEMPERATURE")
     llm_min_top_p: float = Field(default=0.0, alias="LLM_MIN_TOP_P")
     llm_max_top_p: float = Field(default=1.0, alias="LLM_MAX_TOP_P")
-    llm_min_max_tokens: int = Field(default=64, alias="LLM_MIN_MAX_TOKENS")
-    llm_hard_max_tokens: int = Field(default=4096, alias="LLM_HARD_MAX_TOKENS")
 
     retrieval_lexical_k: int = Field(default=6, alias="RETRIEVAL_LEXICAL_K")
     retrieval_semantic_k: int = Field(default=6, alias="RETRIEVAL_SEMANTIC_K")
@@ -82,7 +79,6 @@ class Settings(BaseSettings):
             "model": self.openrouter_model,
             "temperature": self.llm_temperature,
             "top_p": self.llm_default_top_p,
-            "max_tokens": self.llm_default_max_tokens,
         }
 
 

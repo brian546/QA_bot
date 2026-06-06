@@ -20,7 +20,7 @@ def test_llm_settings_reject_invalid_temperature() -> None:
 def test_llm_settings_accept_valid_override() -> None:
     merged = validate_and_merge_llm_settings(
         _settings(),
-        {"model": "anthropic/claude-3.5-sonnet", "temperature": 0.1, "top_p": 0.3, "max_tokens": 1000},
+        {"model": "anthropic/claude-3.5-sonnet", "temperature": 0.1, "top_p": 0.3},
     )
     assert merged["model"] == "anthropic/claude-3.5-sonnet"
     assert merged["temperature"] == 0.1

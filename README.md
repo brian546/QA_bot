@@ -132,7 +132,6 @@ Session-scoped controls (rendered dynamically from backend config):
 - model
 - temperature
 - top_p
-- max_tokens
 
 Defaults are backend-provided and optimized for grounded QA (low randomness).
 

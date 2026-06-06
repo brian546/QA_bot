@@ -11,7 +11,7 @@ def validate_and_merge_llm_settings(settings: Settings, overrides: dict[str, Any
     """Merge defaults with user overrides and enforce constraints."""
     merged = settings.default_llm_settings()
     if overrides:
-        for key in ("model", "temperature", "top_p", "max_tokens"):
+        for key in ("model", "temperature", "top_p"):
             if key in overrides and overrides[key] is not None:
                 merged[key] = overrides[key]
 
@@ -30,16 +30,9 @@ def validate_and_merge_llm_settings(settings: Settings, overrides: dict[str, Any
     if not settings.llm_min_top_p <= top_p <= settings.llm_max_top_p:
         raise ValueError(f"top_p must be between {settings.llm_min_top_p} and {settings.llm_max_top_p}")
 
-    max_tokens = int(merged["max_tokens"])
-    if not settings.llm_min_max_tokens <= max_tokens <= settings.llm_hard_max_tokens:
-        raise ValueError(
-            f"max_tokens must be between {settings.llm_min_max_tokens} and {settings.llm_hard_max_tokens}"
-        )
-
     merged["model"] = model
     merged["temperature"] = temperature
     merged["top_p"] = top_p
-    merged["max_tokens"] = max_tokens
     return merged
 
 
@@ -52,7 +45,6 @@ def get_chat_model(settings: Settings, llm_settings: dict[str, Any] | None = Non
         base_url=settings.openrouter_base_url,
         temperature=effective["temperature"],
         top_p=effective["top_p"],
-        max_tokens=effective["max_tokens"],
         timeout=settings.openrouter_timeout,
         max_retries=settings.openrouter_max_retries,
     )

@@ -22,7 +22,6 @@ def test_api_smoke_health_and_ask() -> None:
                 "model": "openai/gpt-oss-120b:free",
                 "temperature": 0.0,
                 "top_p": 0.2,
-                "max_tokens": 500,
             },
         },
     )

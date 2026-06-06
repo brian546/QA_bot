@@ -9,7 +9,6 @@ class LLMSettingsPayload(BaseModel):
     model: str | None = None
     temperature: float | None = None
     top_p: float | None = None
-    max_tokens: int | None = None
 
 
 class AskRequest(BaseModel):

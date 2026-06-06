@@ -28,7 +28,6 @@ def initialize_llm_settings_from_runtime(runtime_config: dict[str, Any]) -> dict
         "model": defaults.get("model"),
         "temperature": float(defaults.get("temperature", 0.0)),
         "top_p": float(defaults.get("top_p", 0.2)),
-        "max_tokens": int(defaults.get("max_tokens", 1200)),
     }
 
 
@@ -41,7 +40,6 @@ def normalize_llm_settings(runtime_config: dict[str, Any], current: dict[str, An
 
     temperature_constraints = constraints.get("temperature", {"min": 0.0, "max": 1.0, "step": 0.05})
     top_p_constraints = constraints.get("top_p", {"min": 0.0, "max": 1.0, "step": 0.05})
-    max_tokens_constraints = constraints.get("max_tokens", {"min": 64, "max": 4096, "step": 1})
 
     model = current.get("model", defaults.get("model"))
     if available_models and model not in available_models:
@@ -65,14 +63,6 @@ def normalize_llm_settings(runtime_config: dict[str, Any], current: dict[str, An
                 float(top_p_constraints.get("step", 0.05)),
             )
         ),
-        "max_tokens": int(
-            _align_slider_value(
-                float(current.get("max_tokens", defaults.get("max_tokens", 1200))),
-                float(max_tokens_constraints.get("min", 64)),
-                float(max_tokens_constraints.get("max", 4096)),
-                float(max_tokens_constraints.get("step", 64)),
-            )
-        ),
     }
 
 
@@ -84,7 +74,6 @@ def render_llm_controls(runtime_config: dict[str, Any], current: dict[str, Any])
     model_key = "llm_model_control"
     temperature_key = "llm_temperature_control"
     top_p_key = "llm_top_p_control"
-    max_tokens_key = "llm_max_tokens_control"
 
     reset_requested = bool(st.session_state.get("llm_reset_requested", False))
     if reset_requested:
@@ -95,7 +84,6 @@ def render_llm_controls(runtime_config: dict[str, Any], current: dict[str, Any])
         _sync_widget_value(model_key, defaults["model"], force=True)
         _sync_widget_value(temperature_key, defaults["temperature"], force=True)
         _sync_widget_value(top_p_key, defaults["top_p"], force=True)
-        _sync_widget_value(max_tokens_key, defaults["max_tokens"], force=True)
         st.session_state["llm_reset_requested"] = False
         effective_current = defaults
     else:
@@ -107,15 +95,12 @@ def render_llm_controls(runtime_config: dict[str, Any], current: dict[str, Any])
             effective_current["temperature"] = st.session_state[temperature_key]
         if top_p_key in st.session_state:
             effective_current["top_p"] = st.session_state[top_p_key]
-        if max_tokens_key in st.session_state:
-            effective_current["max_tokens"] = st.session_state[max_tokens_key]
 
     normalized = normalize_llm_settings(runtime_config, effective_current)
 
     current_model = st.session_state.get(model_key)
     current_temperature = st.session_state.get(temperature_key)
     current_top_p = st.session_state.get(top_p_key)
-    current_max_tokens = st.session_state.get(max_tokens_key)
 
     _sync_widget_value(
         model_key,
@@ -131,11 +116,6 @@ def render_llm_controls(runtime_config: dict[str, Any], current: dict[str, Any])
         top_p_key,
         normalized["top_p"],
         force=current_top_p is not None and float(current_top_p) != float(normalized["top_p"]),
-    )
-    _sync_widget_value(
-        max_tokens_key,
-        normalized["max_tokens"],
-        force=current_max_tokens is not None and int(current_max_tokens) != int(normalized["max_tokens"]),
     )
 
     with st.sidebar.expander("LLM behavior controls", expanded=False):
@@ -170,23 +150,11 @@ def render_llm_controls(runtime_config: dict[str, Any], current: dict[str, Any])
             help="Nucleus sampling cap. Usually tune carefully with temperature.",
         )
 
-        m_c = constraints.get("max_tokens", {"min": 64, "max": 4096, "step": 1})
-        max_tokens_step = int(m_c.get("step", 1))
-        max_tokens = st.slider(
-            "Max tokens",
-            min_value=int(m_c.get("min", 64)),
-            max_value=int(m_c.get("max", 4096)),
-            step=max_tokens_step,
-            key=max_tokens_key,
-            help="Upper bound for response length.",
-        )
-
         reset_clicked = st.button("Reset model settings", use_container_width=True)
 
     new_settings = {
         "model": model,
         "temperature": temperature,
         "top_p": top_p,
-        "max_tokens": max_tokens,
     }
     return normalize_llm_settings(runtime_config, new_settings), reset_clicked
