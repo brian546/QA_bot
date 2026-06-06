@@ -25,7 +25,6 @@ async def upload_files(
     session = store.get_or_create(session_id)
 
     accepted_files: list[str] = []
-    batch_seen: set[str] = set()
     new_chunks: list[dict[str, object]] = []
 
     for file in files:
@@ -34,7 +33,7 @@ async def upload_files(
         if not key.endswith(".pdf"):
             continue
 
-        if key in session.processed_files or key in batch_seen:
+        if key in session.processed_files:
             continue
 
         raw = await file.read()
@@ -51,7 +50,6 @@ async def upload_files(
         new_chunks.extend(chunks)
 
         session.processed_files.add(key)
-        batch_seen.add(key)
         accepted_files.append(file_name)
         session.uploaded_documents.append(
             {
