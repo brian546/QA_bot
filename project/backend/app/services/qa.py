@@ -50,7 +50,7 @@ def rewrite_query_with_history(
     llm_settings: dict[str, Any],
 ) -> str:
     """Rewrite query into standalone form using OpenRouter when available."""
-    history_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history[-6:])
+    history_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history)
     prompt = f"Chat history:\n{history_text}\n\nQuestion:\n{question}\n\nStandalone query:"
     try:
         model = get_chat_model(settings, llm_settings)
@@ -72,7 +72,7 @@ def should_search_documents(
     if not docs_available:
         return False
 
-    history_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history[-4:])
+    history_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history)
     prompt = (
         f"Documents available: {docs_available}\n"
         f"Recent history:\n{history_text}\n\n"
@@ -105,7 +105,7 @@ def answer_directly(
     llm_settings: dict[str, Any],
 ) -> str:
     """Answer without retrieval when query does not require document search."""
-    history_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history[-6:])
+    history_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history)
     prompt = (
         f"Chat history:\n{history_text}\n\n"
         f"Question:\n{question}\n\n"
@@ -120,7 +120,7 @@ def answer_directly(
     except Exception:
         pass
 
-    return "I can answer general questions directly. For questions about your documents, upload one or more files first."
+    return "Chat model is unavailable. Try again later."
 
 
 def compress_evidence(
