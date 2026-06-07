@@ -140,8 +140,13 @@ def main() -> None:
         st.rerun()
 
     uploader_state_key = f"uploader_files_{st.session_state.uploader_key}"
+    uploader_label = "Upload documents (PDF, TXT, MD, CSV, DOCX, PPTX, XLSX)"
+    if st.session_state.uploaded_docs:
+        loaded_names = ", ".join(str(doc.get("filename", "unknown")) for doc in st.session_state.uploaded_docs)
+        uploader_label = f"{uploader_label}\n\nLoaded in this session: {loaded_names}"
+
     st.file_uploader(
-        "Upload documents (PDF, TXT, MD, CSV, DOCX, PPTX, XLSX)",
+        uploader_label,
         type=["pdf", "txt", "md", "markdown", "csv", "docx", "pptx", "xlsx"],
         accept_multiple_files=True,
         key=uploader_state_key,
@@ -189,12 +194,6 @@ def main() -> None:
             citations = response.get("citations", [])
 
             if citations:
-                with st.expander("Citations"):
-                    for cite in citations:
-                        st.write(
-                            f"- {cite.get('filename')} page {cite.get('page')} chunk {cite.get('chunk_id')}"
-                        )
-
                 with st.expander("Retrieval diagnostics", expanded=False):
                     st.json(response.get("retrieval_diagnostics", {}))
 
