@@ -26,6 +26,7 @@ Grounded multi-document question answering app built with FastAPI, Streamlit, La
 ```bash
 uv sync
 ```
+
 On macOS, need to install `faiss-cpu` separately due to `uv` constraints:
 
 ```bash
@@ -89,8 +90,9 @@ Routing behavior:
 - Frontend fetches safe runtime config from `GET /config`.
 - Backend is source of truth for models, defaults, and parameter constraints.
 - Config payload excludes secrets.
-- Supported controls currently include `model`, `temperature`, `top_p`, `lexical_weight`, and `semantic_weight`.
+- Supported controls currently include `model`, `temperature`, `top_p`, `lexical_weight`, `semantic_weight`, and `citations_k`.
 - Retrieval weights are normalized server-side before fusion.
+- Retrieval depth and citation cap are configured via `.env` using a single setting: `CITATIONS_MAX_K`.
 
 ## Session And Upload Behavior
 
@@ -106,7 +108,7 @@ Routing behavior:
 - `GET /config`
 - `POST /upload` (multipart form: `session_id`, `files`)
 - `POST /upload/remove` (json: `session_id`, `file_keys`)
-- `POST /ask` (json: `session_id`, `question`, optional `chat_history`, `llm_settings`, `retrieval_settings`)
+- `POST /ask` (json: `session_id`, `question`, optional `chat_history`, `llm_settings`, `retrieval_settings`, `citations_k`)
 - `POST /clear-session` (json: `session_id`)
 - `GET /sessions`
 - `GET /sessions/{session_id}`

@@ -121,7 +121,12 @@ class GraphNodes:
             top_k=max(self.settings.retrieval_lexical_k, self.settings.retrieval_semantic_k),
         )
         state["fused_results"] = fused
-        state["retrieval_diagnostics"] = build_diagnostics(lexical, semantic, fused)
+        state["retrieval_diagnostics"] = build_diagnostics(
+            lexical,
+            semantic,
+            fused,
+            top_k=int(self.settings.citations_max_k),
+        )
         return state
 
     def compress_context(self, state: GraphState) -> GraphState:
@@ -149,12 +154,21 @@ class GraphNodes:
             state["retrieval_diagnostics"] = {"lexical_hits": [], "semantic_hits": [], "fused_hits": []}
             return state
 
+        requested_citations = state.get("citations_k")
+        default_citations = int(self.settings.citations_default_k)
+        capped_default = min(default_citations, int(self.settings.citations_max_k))
+        citation_limit = int(requested_citations) if requested_citations is not None else capped_default
+        citation_limit = max(1, min(citation_limit, int(self.settings.citations_max_k)))
+        citation_limit = min(citation_limit, len(state.get("fused_results", [])))
+        citation_limit = max(1, citation_limit)
+
         answer, citations, confidence = answer_with_evidence(
             self.settings,
             state.get("current_question", ""),
             state.get("compressed_context", ""),
             state.get("fused_results", []),
             state.get("effective_llm_settings", {}),
+            citation_limit,
         )
         state["final_answer"] = answer
         state["citations"] = citations

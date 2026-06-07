@@ -6,6 +6,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,8 +37,7 @@ class Settings(BaseSettings):
     llm_min_top_p: float = Field(default=0.0, alias="LLM_MIN_TOP_P")
     llm_max_top_p: float = Field(default=1.0, alias="LLM_MAX_TOP_P")
 
-    retrieval_lexical_k: int = Field(default=6, alias="RETRIEVAL_LEXICAL_K")
-    retrieval_semantic_k: int = Field(default=6, alias="RETRIEVAL_SEMANTIC_K")
+    citations_max_k: int = Field(default=10, alias="CITATIONS_MAX_K")
     lexical_weight: float = Field(default=1.0, alias="LEXICAL_WEIGHT")
     semantic_weight: float = Field(default=1.0, alias="SEMANTIC_WEIGHT")
 
@@ -55,6 +55,27 @@ class Settings(BaseSettings):
         if not value.strip():
             raise ValueError("OPENROUTER_MODEL must not be empty")
         return value.strip()
+
+    @model_validator(mode="after")
+    def _validate_citation_bounds(self) -> "Settings":
+        if self.citations_max_k < 1:
+            raise ValueError("CITATIONS_MAX_K must be at least 1")
+        return self
+
+    @property
+    def retrieval_lexical_k(self) -> int:
+        """Use CITATIONS_MAX_K as the unified retrieval depth for lexical retrieval."""
+        return int(self.citations_max_k)
+
+    @property
+    def retrieval_semantic_k(self) -> int:
+        """Use CITATIONS_MAX_K as the unified retrieval depth for semantic retrieval."""
+        return int(self.citations_max_k)
+
+    @property
+    def citations_default_k(self) -> int:
+        """Use CITATIONS_MAX_K as the default citation count."""
+        return int(self.citations_max_k)
 
     def allowed_models(self) -> list[str]:
         """Parse OPENROUTER_ALLOWED_MODELS from CSV or JSON list."""

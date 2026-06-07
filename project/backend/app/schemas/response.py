@@ -63,6 +63,7 @@ class RuntimeConfigResponse(BaseModel):
     default_model: str
     default_llm_settings: dict[str, Any]
     default_retrieval_settings: dict[str, Any]
+    default_citations_k: int
     supported_controls: list[str]
     parameter_constraints: dict[str, Any]
     recommended_defaults: dict[str, Any]

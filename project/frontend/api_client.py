@@ -52,16 +52,21 @@ class APIClient:
         chat_history: list[dict[str, str]],
         llm_settings: dict[str, Any],
         retrieval_settings: dict[str, Any],
+        citations_k: int | None = None,
     ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "session_id": session_id,
+            "question": question,
+            "chat_history": chat_history,
+            "llm_settings": llm_settings,
+            "retrieval_settings": retrieval_settings,
+        }
+        if citations_k is not None:
+            payload["citations_k"] = int(citations_k)
+
         response = requests.post(
             f"{self.base_url}/ask",
-            json={
-                "session_id": session_id,
-                "question": question,
-                "chat_history": chat_history,
-                "llm_settings": llm_settings,
-                "retrieval_settings": retrieval_settings,
-            },
+            json=payload,
             timeout=120,
         )
         response.raise_for_status()

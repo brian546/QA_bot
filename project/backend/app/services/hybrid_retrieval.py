@@ -42,10 +42,13 @@ def build_diagnostics(
     lexical_results: list[dict[str, Any]],
     semantic_results: list[dict[str, Any]],
     fused_results: list[dict[str, Any]],
+    top_k: int = 5,
 ) -> dict[str, Any]:
+    effective_top_k = max(1, int(top_k))
+
     def summarize(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         summary: list[dict[str, Any]] = []
-        for row in rows[:5]:
+        for row in rows[:effective_top_k]:
             summary.append(
                 {
                     "chunk_id": row.get("chunk_id"),

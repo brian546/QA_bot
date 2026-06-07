@@ -21,6 +21,7 @@ def test_api_smoke_health_and_ask() -> None:
             "session_id": "s-smoke",
             "question": "What is this about?",
             "chat_history": [],
+            "citations_k": 3,
             "llm_settings": {
                 "model": "openai/gpt-oss-120b:free",
                 "temperature": 0.0,

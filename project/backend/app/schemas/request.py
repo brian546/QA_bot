@@ -22,6 +22,7 @@ class AskRequest(BaseModel):
     chat_history: list[dict[str, str]] | None = None
     llm_settings: LLMSettingsPayload | None = None
     retrieval_settings: RetrievalSettingsPayload | None = None
+    citations_k: int | None = Field(default=None, ge=1)
 
 
 class ClearSessionRequest(BaseModel):

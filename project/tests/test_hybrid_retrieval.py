@@ -1,4 +1,4 @@
-from project.backend.app.services.hybrid_retrieval import reciprocal_rank_fusion
+from project.backend.app.services.hybrid_retrieval import build_diagnostics, reciprocal_rank_fusion
 
 
 def test_hybrid_fusion_deduplicates_by_chunk_id() -> None:
@@ -14,3 +14,16 @@ def test_hybrid_fusion_deduplicates_by_chunk_id() -> None:
     ids = [row["chunk_id"] for row in fused]
     assert len(ids) == len(set(ids))
     assert "c2" in ids
+
+
+def test_build_diagnostics_respects_top_k() -> None:
+    rows = [
+        {"chunk_id": f"c{idx}", "filename": "a.pdf", "page": idx, "score": float(idx)}
+        for idx in range(1, 9)
+    ]
+
+    diagnostics = build_diagnostics(rows, rows, rows, top_k=7)
+
+    assert len(diagnostics["lexical_hits"]) == 7
+    assert len(diagnostics["semantic_hits"]) == 7
+    assert len(diagnostics["fused_hits"]) == 7

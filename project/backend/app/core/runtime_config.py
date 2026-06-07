@@ -19,12 +19,14 @@ def build_runtime_config(settings: Settings) -> dict[str, Any]:
             "lexical_weight": settings.lexical_weight,
             "semantic_weight": settings.semantic_weight,
         },
+        "default_citations_k": settings.citations_default_k,
         "supported_controls": [
             "model",
             "temperature",
             "top_p",
             "lexical_weight",
             "semantic_weight",
+            "citations_k",
         ],
         "parameter_constraints": {
             "temperature": {
@@ -46,6 +48,11 @@ def build_runtime_config(settings: Settings) -> dict[str, Any]:
                 "min": 0.0,
                 "max": 1.0,
                 "step": 0.01,
+            },
+            "citations_k": {
+                "min": 1,
+                "max": settings.citations_max_k,
+                "step": 1,
             },
         },
         "recommended_defaults": settings.default_llm_settings(),

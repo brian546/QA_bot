@@ -23,6 +23,7 @@ class GraphState(TypedDict, total=False):
     effective_llm_settings: dict[str, Any]
     retrieval_settings: dict[str, Any]
     effective_retrieval_settings: dict[str, Any]
+    citations_k: int
     needs_document_search: bool
     route_decision: str
     error: str

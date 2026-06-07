@@ -146,8 +146,10 @@ def answer_with_evidence(
     compressed_context: str,
     fused_rows: list[dict[str, Any]],
     llm_settings: dict[str, Any],
+    citation_limit: int,
 ) -> tuple[str, list[dict[str, Any]], float]:
     """Generate answer and citations grounded in retrieved evidence."""
+    effective_limit = max(1, int(citation_limit))
     citations = [
         {
             "chunk_id": row.get("chunk_id"),
@@ -155,7 +157,7 @@ def answer_with_evidence(
             "page": row.get("page"),
             "section": row.get("section"),
         }
-        for row in fused_rows[:5]
+        for row in fused_rows[:effective_limit]
     ]
 
     if not compressed_context.strip():
