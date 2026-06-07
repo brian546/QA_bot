@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import mimetypes
 from typing import Any
 
 import requests
@@ -22,7 +23,10 @@ class APIClient:
         return response.json()
 
     def upload(self, session_id: str, files: list[Any]) -> dict[str, Any]:
-        payload = [("files", (f.name, f.getvalue(), "application/pdf")) for f in files]
+        payload = []
+        for file_obj in files:
+            mime_type = mimetypes.guess_type(file_obj.name)[0] or "application/octet-stream"
+            payload.append(("files", (file_obj.name, file_obj.getvalue(), mime_type)))
         response = requests.post(
             f"{self.base_url}/upload",
             data={"session_id": session_id},

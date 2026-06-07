@@ -1,10 +1,10 @@
-# Hybrid Multi-PDF QA MVP
+# Hybrid Multi-Document QA MVP
 
 Grounded multi-document question answering app built with FastAPI, Streamlit, LangGraph, LangChain, and OpenRouter.
 
 ## What It Does
 
-- Upload multiple PDFs and process them immediately.
+- Upload multiple documents (PDF, TXT, Markdown, CSV, DOCX, PPTX) and process them immediately.
 - Keep uploads session-scoped, with duplicate skipping by normalized file key.
 - Sync uploader deselection to backend removal (`/upload/remove`).
 - Answer questions with hybrid retrieval (BM25 + semantic vectors) and citations.
@@ -129,7 +129,7 @@ Routing behavior:
 
 ## Manual Verification Checklist
 
-- Upload 2 PDFs and confirm immediate processing.
+- Upload 2 supported documents and confirm immediate processing.
 - Remove one file in uploader and confirm backend document/index removal effects.
 - Re-add a previously removed file and confirm it is processed again.
 - Re-upload a duplicate normalized key and confirm it is skipped.
@@ -141,4 +141,4 @@ Routing behavior:
 
 ## Privacy Notice
 
-Warning: Do not upload PDFs containing personal, sensitive, or confidential information. This app calls external LLM/embedding services and stores session data in memory for app functionality.
+Warning: Do not upload documents containing personal, sensitive, or confidential information. This app calls external LLM/embedding services and stores session data in memory for app functionality.

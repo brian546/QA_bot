@@ -67,3 +67,28 @@ def test_remove_files_updates_session_state_and_indexes() -> None:
     assert current.processed_files == {"beta.pdf"}
     assert len(current.chunks) == 1
     assert current.chunks[0]["filename"] == "Beta.pdf"
+
+
+def test_upload_accepts_multiple_text_document_formats() -> None:
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.post(
+        "/upload",
+        data={"session_id": "multi-format-upload"},
+        files=[
+            ("files", ("notes.txt", b"alpha line\nbeta line", "text/plain")),
+            ("files", ("readme.md", b"# Title\nMarkdown body", "text/markdown")),
+            ("files", ("table.csv", b"name,value\nfoo,42\nbar,77", "text/csv")),
+        ],
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload["accepted_files"]) == {"notes.txt", "readme.md", "table.csv"}
+
+    current = app.state.session_store.get("multi-format-upload")
+    assert current is not None
+    assert current.processed_files == {"notes.txt", "readme.md", "table.csv"}
+    assert len(current.uploaded_documents) == 3
+    assert len(current.chunks) >= 3

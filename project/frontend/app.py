@@ -54,8 +54,8 @@ def reset_retrieval_settings_locally() -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="Hybrid PDF QA", layout="wide")
-    st.title("Hybrid Multi-PDF QA")
+    st.set_page_config(page_title="Hybrid Document QA", layout="wide")
+    st.title("Hybrid Multi-Document QA")
 
     # backend_url = st.sidebar.text_input("Backend URL", value=DEFAULT_BACKEND_URL)
     client = APIClient(DEFAULT_BACKEND_URL)
@@ -141,8 +141,8 @@ def main() -> None:
 
     uploader_state_key = f"uploader_files_{st.session_state.uploader_key}"
     st.file_uploader(
-        "Upload PDF files",
-        type=["pdf"],
+        "Upload documents (PDF, TXT, MD, CSV, DOCX, PPTX)",
+        type=["pdf", "txt", "md", "markdown", "csv", "docx", "pptx"],
         accept_multiple_files=True,
         key=uploader_state_key,
         on_change=handle_uploader_change,
@@ -161,7 +161,7 @@ def main() -> None:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    question = st.chat_input("Ask a question about your uploaded PDFs")
+    question = st.chat_input("Ask a question about your uploaded documents")
     if question:
         st.session_state.messages.append({"role": "user", "content": question})
         with st.chat_message("user"):
@@ -181,7 +181,7 @@ def main() -> None:
                     st.error(f"Ask failed: {exc}")
                     return
 
-            answer = response.get("answer", "I could not find enough evidence in the uploaded PDFs.")
+            answer = response.get("answer", "I could not find enough evidence in the uploaded documents.")
             st.markdown(answer)
             st.session_state.messages.append({"role": "assistant", "content": answer})
             st.session_state.citations = response.get("citations", [])

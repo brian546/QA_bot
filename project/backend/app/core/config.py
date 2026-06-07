@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    app_name: str = "Hybrid Multi-PDF QA"
+    app_name: str = "Hybrid Multi-Document QA"
     app_version: str = "0.1.0"
 
     openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")

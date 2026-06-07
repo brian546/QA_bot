@@ -173,7 +173,7 @@ class GraphNodes:
 
         if not has_docs:
             state["should_fallback"] = True
-            state["error"] = "No uploaded PDFs found for this session."
+            state["error"] = "No uploaded documents found for this session."
             return state
 
         if not has_evidence or not has_citations or confidence < 0.2:
@@ -188,7 +188,7 @@ class GraphNodes:
         return state
 
     def fallback(self, state: GraphState) -> GraphState:
-        state["final_answer"] = "I could not find enough evidence in the uploaded PDFs."
+        state["final_answer"] = "I could not find enough evidence in the uploaded documents."
         state["citations"] = []
         state["confidence"] = 0.1
         state.setdefault("retrieval_diagnostics", {"lexical_hits": [], "semantic_hits": [], "fused_hits": []})

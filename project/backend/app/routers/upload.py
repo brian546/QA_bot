@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
 from project.backend.app.schemas.request import RemoveFilesRequest
@@ -8,7 +10,7 @@ from project.backend.app.schemas.response import UploadResponse
 from project.backend.app.services.chunking import chunk_pages
 from project.backend.app.services.dedupe import normalize_file_key
 from project.backend.app.services.lexical_retrieval import build_bm25_index
-from project.backend.app.services.parser import parse_pdf_pages
+from project.backend.app.services.parser import SUPPORTED_UPLOAD_EXTENSIONS, parse_document_pages
 from project.backend.app.services.semantic_retrieval import build_faiss_index
 
 router = APIRouter(tags=["upload"])
@@ -30,7 +32,8 @@ async def upload_files(
     for file in files:
         file_name = file.filename or ""
         key = normalize_file_key(file_name)
-        if not key.endswith(".pdf"):
+        ext = os.path.splitext(key)[1]
+        if ext not in SUPPORTED_UPLOAD_EXTENSIONS:
             continue
 
         if key in session.processed_files:
@@ -41,7 +44,7 @@ async def upload_files(
             continue
 
         try:
-            pages = parse_pdf_pages(raw, file_name)
+            pages = parse_document_pages(raw, file_name)
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"Failed to parse {file_name}: {exc}") from exc
 

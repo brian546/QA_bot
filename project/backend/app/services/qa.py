@@ -24,7 +24,7 @@ ANSWER_SYSTEM = (
 )
 
 ROUTER_SYSTEM = (
-    "You are a routing classifier. Decide if a user question requires searching uploaded PDFs. "
+    "You are a routing classifier. Decide if a user question requires searching uploaded documents. "
     "Respond with exactly one token: SEARCH or DIRECT. "
     "Choose SEARCH when the answer likely depends on document-specific evidence. "
     "Choose DIRECT for general knowledge or chit-chat not dependent on uploaded files."
@@ -32,7 +32,7 @@ ROUTER_SYSTEM = (
 
 DIRECT_SYSTEM = (
     "You are a helpful assistant. Answer directly and briefly. "
-    "If the user asks about specific uploaded documents and none are available, say they should upload PDFs."
+    "If the user asks about specific uploaded documents and none are available, say they should upload files first."
 )
 
 
@@ -112,7 +112,7 @@ def answer_directly(
         pass
 
     return (
-        "I can answer general questions directly. For questions about your documents, upload one or more PDFs first.",
+        "I can answer general questions directly. For questions about your documents, upload one or more files first.",
         0.7,
     )
 
@@ -159,7 +159,7 @@ def answer_with_evidence(
     ]
 
     if not compressed_context.strip():
-        return "I could not find enough evidence in the uploaded PDFs.", [], 0.1
+        return "I could not find enough evidence in the uploaded documents.", [], 0.1
 
     prompt = (
         f"Question:\n{question}\n\n"

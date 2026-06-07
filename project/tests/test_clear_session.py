@@ -64,4 +64,5 @@ def test_list_and_get_sessions() -> None:
         ],
         "processed_files": ["alpha.pdf"],
         "llm_settings": {"model": "openai/gpt-oss-120b:free", "temperature": 0.1},
+        "retrieval_settings": {},
     }
