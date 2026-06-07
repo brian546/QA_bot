@@ -30,10 +30,6 @@ from project.frontend.utils import (
 )
 
 
-def build_chat_history(messages: list[dict[str, str]]) -> list[dict[str, str]]:
-    return [{"role": m["role"], "content": m["content"]} for m in messages]
-
-
 def build_session_label(session: dict[str, object]) -> str:
     session_id = str(session.get("session_id", ""))
     short_id = session_id if len(session_id) <= 12 else f"{session_id[:8]}...{session_id[-4:]}"
@@ -178,7 +174,6 @@ def main() -> None:
                     response = client.ask(
                         session_id=st.session_state.session_id,
                         question=question,
-                        chat_history=build_chat_history(st.session_state.messages[:-1]),
                         llm_settings=st.session_state.llm_settings,
                         retrieval_settings=st.session_state.retrieval_settings,
                     )

@@ -49,7 +49,6 @@ class APIClient:
         self,
         session_id: str,
         question: str,
-        chat_history: list[dict[str, str]],
         llm_settings: dict[str, Any],
         retrieval_settings: dict[str, Any],
         citations_k: int | None = None,
@@ -57,7 +56,6 @@ class APIClient:
         payload: dict[str, Any] = {
             "session_id": session_id,
             "question": question,
-            "chat_history": chat_history,
             "llm_settings": llm_settings,
             "retrieval_settings": retrieval_settings,
         }

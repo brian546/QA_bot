@@ -11,6 +11,7 @@ from project.backend.app.services.semantic_retrieval import build_faiss_index
 def test_api_smoke_health_and_ask() -> None:
     app = create_app()
     client = TestClient(app)
+    default_llm_settings = app.state.settings.default_llm_settings()
 
     health = client.get("/health")
     assert health.status_code == 200
@@ -20,13 +21,8 @@ def test_api_smoke_health_and_ask() -> None:
         json={
             "session_id": "s-smoke",
             "question": "What is this about?",
-            "chat_history": [],
             "citations_k": 3,
-            "llm_settings": {
-                "model": "openai/gpt-oss-120b:free",
-                "temperature": 0.0,
-                "top_p": 0.2,
-            },
+            "llm_settings": default_llm_settings,
         },
     )
     assert ask.status_code == 200
