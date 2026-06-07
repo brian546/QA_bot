@@ -79,6 +79,8 @@ def should_search_documents(
         f"Question:\n{question}\n\n"
         "Return SEARCH or DIRECT."
     )
+    settings["temperature"] = 0
+
     try:
         model = get_chat_model(settings, llm_settings)
         response = model.invoke([SystemMessage(content=ROUTER_SYSTEM), HumanMessage(content=prompt)])
@@ -205,7 +207,9 @@ def is_answer_confident(
         f"Citations:\n{citation_preview}\n\n"
         "Return CONFIDENT or NOT_CONFIDENT."
     )
-    
+
+    settings["temperature"] = 0
+
     try:
         model = get_chat_model(settings, llm_settings)
         response = model.invoke([SystemMessage(content=CONFIDENCE_EVAL_SYSTEM), HumanMessage(content=prompt)])
