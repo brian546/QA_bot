@@ -25,7 +25,7 @@ def ask_question(payload: AskRequest, request: Request) -> AskResponse:
     input_state = {
         "session_id": payload.session_id,
         "current_question": payload.question,
-        "chat_history": payload.chat_history or session.chat_history,
+        "chat_history": session.chat_history,
         "llm_settings": effective_llm_settings,
         "citations_k": payload.citations_k,
         "retrieval_settings": (
