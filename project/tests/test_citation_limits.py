@@ -42,7 +42,7 @@ def test_answer_with_evidence_respects_citation_limit() -> None:
         for idx in range(12)
     ]
 
-    _, citations, _ = answer_with_evidence(
+    _, citations = answer_with_evidence(
         settings=settings,
         question="What does the document say?",
         compressed_context="[doc:1:0] evidence",

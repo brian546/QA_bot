@@ -12,6 +12,7 @@ from project.backend.app.services.qa import (
     answer_directly,
     answer_with_evidence,
     compress_evidence,
+    is_answer_confident,
     rewrite_query_with_history,
     should_search_documents,
 )
@@ -142,14 +143,13 @@ class GraphNodes:
 
     def answer_question(self, state: GraphState) -> GraphState:
         if state.get("route_decision") == "direct":
-            answer, confidence = answer_directly(
+            answer = answer_directly(
                 self.settings,
                 state.get("current_question", ""),
                 state.get("chat_history", []),
                 state.get("effective_llm_settings", {}),
             )
             state["final_answer"] = answer
-            state["confidence"] = confidence
             state["citations"] = []
             state["retrieval_diagnostics"] = {"lexical_hits": [], "semantic_hits": [], "fused_hits": []}
             return state
@@ -162,7 +162,7 @@ class GraphNodes:
         citation_limit = min(citation_limit, len(state.get("fused_results", [])))
         citation_limit = max(1, citation_limit)
 
-        answer, citations, confidence = answer_with_evidence(
+        answer, citations = answer_with_evidence(
             self.settings,
             state.get("current_question", ""),
             state.get("compressed_context", ""),
@@ -172,7 +172,6 @@ class GraphNodes:
         )
         state["final_answer"] = answer
         state["citations"] = citations
-        state["confidence"] = confidence
         return state
 
     def evaluate_answer(self, state: GraphState) -> GraphState:
@@ -183,20 +182,34 @@ class GraphNodes:
         has_docs = bool(state.get("uploaded_documents"))
         has_evidence = bool(state.get("fused_results"))
         has_citations = bool(state.get("citations"))
-        confidence = float(state.get("confidence", 0.0))
 
         if not has_docs:
             state["should_fallback"] = True
             state["error"] = "No uploaded documents found for this session."
             return state
 
-        if not has_evidence or not has_citations or confidence < 0.2:
+        if not has_evidence or not has_citations:
             state["should_fallback"] = True
             state["error"] = "Insufficient evidence for grounded answer."
             return state
 
-        if confidence < 0.45:
-            state["final_answer"] = f"{state.get('final_answer', '')}\n\nWarning: low confidence answer."
+        llm_settings = state.get("effective_llm_settings") or validate_and_merge_llm_settings(
+            self.settings, state.get("llm_settings")
+        )
+        confident = is_answer_confident(
+            self.settings,
+            state.get("current_question", ""),
+            state.get("final_answer", ""),
+            state.get("compressed_context", ""),
+            state.get("citations", []),
+            llm_settings,
+        )
+        state["answer_is_confident"] = confident
+
+        if not confident:
+            state["should_fallback"] = True
+            state["error"] = "Insufficient confidence in grounded answer."
+            return state
 
         state["should_fallback"] = False
         return state
@@ -204,6 +217,6 @@ class GraphNodes:
     def fallback(self, state: GraphState) -> GraphState:
         state["final_answer"] = "I could not find enough evidence in the uploaded documents."
         state["citations"] = []
-        state["confidence"] = 0.1
+        state["answer_is_confident"] = False
         state.setdefault("retrieval_diagnostics", {"lexical_hits": [], "semantic_hits": [], "fused_hits": []})
         return state

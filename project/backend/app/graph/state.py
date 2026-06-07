@@ -17,7 +17,7 @@ class GraphState(TypedDict, total=False):
     compressed_context: str
     final_answer: str
     citations: list[dict[str, Any]]
-    confidence: float
+    answer_is_confident: bool
     retrieval_diagnostics: dict[str, Any]
     llm_settings: dict[str, Any]
     effective_llm_settings: dict[str, Any]

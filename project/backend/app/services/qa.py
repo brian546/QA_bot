@@ -35,6 +35,13 @@ DIRECT_SYSTEM = (
     "If the user asks about specific uploaded documents and none are available, say they should upload files first."
 )
 
+CONFIDENCE_EVAL_SYSTEM = (
+    "You are an answer confidence evaluator for grounded QA. "
+    "Return exactly one token: CONFIDENT or NOT_CONFIDENT. "
+    "Choose CONFIDENT only when the answer is clearly supported by the provided evidence and citations. "
+    "Choose NOT_CONFIDENT when evidence is weak, missing, contradictory, or the answer is speculative."
+)
+
 
 def rewrite_query_with_history(
     settings: Settings,
@@ -94,7 +101,7 @@ def answer_directly(
     question: str,
     chat_history: list[dict[str, str]],
     llm_settings: dict[str, Any],
-) -> tuple[str, float]:
+) -> str:
     """Answer without retrieval when query does not require document search."""
     history_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history[-6:])
     prompt = (
@@ -107,14 +114,11 @@ def answer_directly(
         response = model.invoke([SystemMessage(content=DIRECT_SYSTEM), HumanMessage(content=prompt)])
         answer = str(response.content).strip()
         if answer:
-            return answer, 0.75
+            return answer
     except Exception:
         pass
 
-    return (
-        "I can answer general questions directly. For questions about your documents, upload one or more files first.",
-        0.7,
-    )
+    return "I can answer general questions directly. For questions about your documents, upload one or more files first."
 
 
 def compress_evidence(
@@ -147,7 +151,7 @@ def answer_with_evidence(
     fused_rows: list[dict[str, Any]],
     llm_settings: dict[str, Any],
     citation_limit: int,
-) -> tuple[str, list[dict[str, Any]], float]:
+) -> tuple[str, list[dict[str, Any]]]:
     """Generate answer and citations grounded in retrieved evidence."""
     effective_limit = max(1, int(citation_limit))
     citations = [
@@ -161,7 +165,7 @@ def answer_with_evidence(
     ]
 
     if not compressed_context.strip():
-        return "I could not find enough evidence in the uploaded documents.", [], 0.1
+        return "I could not find enough evidence in the uploaded documents.", []
 
     prompt = (
         f"Question:\n{question}\n\n"
@@ -175,5 +179,49 @@ def answer_with_evidence(
     except Exception:
         answer = "Based on the retrieved evidence, here is the most likely answer:\n" + compressed_context[:1200]
 
-    confidence = min(0.95, 0.35 + 0.1 * len(citations)) if citations else 0.1
-    return answer, citations, confidence
+    return answer, citations
+
+
+def is_answer_confident(
+    settings: Settings,
+    question: str,
+    answer: str,
+    compressed_context: str,
+    citations: list[dict[str, Any]],
+    llm_settings: dict[str, Any],
+) -> bool:
+    """Use the model to classify whether the grounded answer is confident."""
+    if not answer.strip() or not citations or not compressed_context.strip():
+        return False
+
+    citation_preview = "\n".join(
+        f"- {c.get('filename', 'unknown')} p.{c.get('page', '?')} {c.get('chunk_id', '')}"
+        for c in citations[:8]
+    )
+    prompt = (
+        f"Question:\n{question}\n\n"
+        f"Answer:\n{answer}\n\n"
+        f"Compressed evidence:\n{compressed_context}\n\n"
+        f"Citations:\n{citation_preview}\n\n"
+        "Return CONFIDENT or NOT_CONFIDENT."
+    )
+    
+    try:
+        model = get_chat_model(settings, llm_settings)
+        response = model.invoke([SystemMessage(content=CONFIDENCE_EVAL_SYSTEM), HumanMessage(content=prompt)])
+        verdict = str(response.content).strip().upper()
+        if "NOT_CONFIDENT" in verdict:
+            return False
+        if "CONFIDENT" in verdict:
+            return True
+    except Exception:
+        pass
+
+    lowered = answer.lower()
+    refusal_markers = (
+        "insufficient",
+        "not enough evidence",
+        "could not find enough evidence",
+        "uncertain",
+    )
+    return not any(marker in lowered for marker in refusal_markers)

@@ -4,7 +4,11 @@ from project.backend.app.graph.builder import build_graph
 
 
 def test_graph_routes_to_direct_answer_without_docs() -> None:
-    settings = Settings(OPENROUTER_API_KEY="x", OPENROUTER_MODEL="openai/gpt-oss-120b:free")
+    settings = Settings(
+        OPENROUTER_API_KEY="x",
+        OPENROUTER_MODEL="openai/gpt-oss-120b:free",
+        OPENROUTER_ALLOWED_MODELS="openai/gpt-oss-120b:free",
+    )
     store = InMemorySessionStore()
     graph = build_graph(settings, store)
 

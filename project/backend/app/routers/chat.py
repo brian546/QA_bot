@@ -47,7 +47,6 @@ def ask_question(payload: AskRequest, request: Request) -> AskResponse:
     return AskResponse(
         answer=result.get("final_answer", "I could not find enough evidence in the uploaded PDFs."),
         citations=result.get("citations", []),
-        confidence=float(result.get("confidence", 0.1)),
         retrieval_diagnostics=result.get(
             "retrieval_diagnostics",
             {"lexical_hits": [], "semantic_hits": [], "fused_hits": []},

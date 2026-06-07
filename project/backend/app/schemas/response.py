@@ -27,7 +27,6 @@ class RemoveFilesResponse(BaseModel):
 class AskResponse(BaseModel):
     answer: str
     citations: list[dict[str, Any]]
-    confidence: float
     retrieval_diagnostics: dict[str, Any]
     effective_llm_settings: dict[str, Any]
     effective_retrieval_settings: dict[str, Any]
