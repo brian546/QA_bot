@@ -1,4 +1,7 @@
+import io
+
 from fastapi.testclient import TestClient
+from openpyxl import Workbook
 
 from project.backend.app.main import create_app
 from project.backend.app.services.lexical_retrieval import build_bm25_index
@@ -73,6 +76,17 @@ def test_upload_accepts_multiple_text_document_formats() -> None:
     app = create_app()
     client = TestClient(app)
 
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Data"
+    sheet.append(["name", "value"])
+    sheet.append(["foo", 42])
+    sheet.append(["bar", 77])
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    workbook.close()
+    xlsx_bytes = buffer.getvalue()
+
     response = client.post(
         "/upload",
         data={"session_id": "multi-format-upload"},
@@ -80,15 +94,23 @@ def test_upload_accepts_multiple_text_document_formats() -> None:
             ("files", ("notes.txt", b"alpha line\nbeta line", "text/plain")),
             ("files", ("readme.md", b"# Title\nMarkdown body", "text/markdown")),
             ("files", ("table.csv", b"name,value\nfoo,42\nbar,77", "text/csv")),
+            (
+                "files",
+                (
+                    "table.xlsx",
+                    xlsx_bytes,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ),
+            ),
         ],
     )
 
     assert response.status_code == 200
     payload = response.json()
-    assert set(payload["accepted_files"]) == {"notes.txt", "readme.md", "table.csv"}
+    assert set(payload["accepted_files"]) == {"notes.txt", "readme.md", "table.csv", "table.xlsx"}
 
     current = app.state.session_store.get("multi-format-upload")
     assert current is not None
-    assert current.processed_files == {"notes.txt", "readme.md", "table.csv"}
-    assert len(current.uploaded_documents) == 3
-    assert len(current.chunks) >= 3
+    assert current.processed_files == {"notes.txt", "readme.md", "table.csv", "table.xlsx"}
+    assert len(current.uploaded_documents) == 4
+    assert len(current.chunks) >= 4

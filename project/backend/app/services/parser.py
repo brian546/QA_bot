@@ -7,7 +7,7 @@ from collections import Counter
 
 from pypdf import PdfReader
 
-SUPPORTED_UPLOAD_EXTENSIONS = {".pdf", ".txt", ".md", ".markdown", ".csv", ".docx", ".pptx"}
+SUPPORTED_UPLOAD_EXTENSIONS = {".pdf", ".txt", ".md", ".markdown", ".csv", ".docx", ".pptx", ".xlsx"}
 
 
 def _strip_repeated_page_edges(page_texts: list[str]) -> list[str]:
@@ -134,6 +134,36 @@ def _parse_pptx_document(raw_bytes: bytes, filename: str) -> list[dict[str, obje
     return pages
 
 
+def _parse_xlsx_document(raw_bytes: bytes, filename: str) -> list[dict[str, object]]:
+    try:
+        from openpyxl import load_workbook
+    except ImportError as exc:
+        raise ValueError("XLSX parsing requires openpyxl.") from exc
+
+    workbook = load_workbook(io.BytesIO(raw_bytes), data_only=True, read_only=True)
+    pages: list[dict[str, object]] = []
+
+    for sheet_idx, sheet in enumerate(workbook.worksheets, start=1):
+        lines: list[str] = []
+        for row in sheet.iter_rows(values_only=True):
+            cells = ["" if value is None else str(value).strip() for value in row]
+            if any(cells):
+                lines.append(" | ".join(cells))
+
+        sheet_text = "\n".join(lines).strip()
+        if sheet_text:
+            pages.append(
+                {
+                    "filename": filename,
+                    "page": sheet_idx,
+                    "text": f"Sheet: {sheet.title}\n{sheet_text}",
+                }
+            )
+
+    workbook.close()
+    return pages
+
+
 def parse_document_pages(raw_bytes: bytes, filename: str) -> list[dict[str, object]]:
     """Parse supported document formats into page-like records."""
     ext = os.path.splitext(filename.lower())[1]
@@ -148,5 +178,7 @@ def parse_document_pages(raw_bytes: bytes, filename: str) -> list[dict[str, obje
         return _parse_docx_document(raw_bytes, filename)
     if ext == ".pptx":
         return _parse_pptx_document(raw_bytes, filename)
+    if ext == ".xlsx":
+        return _parse_xlsx_document(raw_bytes, filename)
 
     return []

@@ -141,8 +141,8 @@ def main() -> None:
 
     uploader_state_key = f"uploader_files_{st.session_state.uploader_key}"
     st.file_uploader(
-        "Upload documents (PDF, TXT, MD, CSV, DOCX, PPTX)",
-        type=["pdf", "txt", "md", "markdown", "csv", "docx", "pptx"],
+        "Upload documents (PDF, TXT, MD, CSV, DOCX, PPTX, XLSX)",
+        type=["pdf", "txt", "md", "markdown", "csv", "docx", "pptx", "xlsx"],
         accept_multiple_files=True,
         key=uploader_state_key,
         on_change=handle_uploader_change,

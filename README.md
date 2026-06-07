@@ -4,7 +4,7 @@ Grounded multi-document question answering app built with FastAPI, Streamlit, La
 
 ## What It Does
 
-- Upload multiple documents (PDF, TXT, Markdown, CSV, DOCX, PPTX) and process them immediately.
+- Upload multiple documents (PDF, TXT, Markdown, CSV, DOCX, PPTX, XLSX) and process them immediately.
 - Keep uploads session-scoped, with duplicate skipping by normalized file key.
 - Sync uploader deselection to backend removal (`/upload/remove`).
 - Answer questions with hybrid retrieval (BM25 + semantic vectors) and citations.
