@@ -1,45 +1,57 @@
 # Hybrid Multi-PDF QA MVP
 
-Production-friendly MVP for grounded multi-document question answering using FastAPI, Streamlit, LangGraph, LangChain, and OpenRouter.
+Grounded multi-document question answering app built with FastAPI, Streamlit, LangGraph, LangChain, and OpenRouter.
 
-## Product Overview
+## What It Does
 
-- Users upload multiple PDF files in Streamlit.
-- New files are processed immediately as soon as they appear in the uploader.
-- Duplicate uploads are skipped per session using normalized filename + extension.
-- Retrieval is hybrid: lexical BM25 + semantic vector search.
-- Answers are evidence-grounded and returned with citations.
-- Chat supports follow-up questions via chat history.
-- Clear session resets both frontend and backend session state.
-- Browser-close cleanup is best-effort using beacon events.
+- Upload multiple PDFs and process them immediately.
+- Keep uploads session-scoped, with duplicate skipping by normalized file key.
+- Sync uploader deselection to backend removal (`/upload/remove`).
+- Answer questions with hybrid retrieval (BM25 + semantic vectors) and citations.
+- Support follow-up questions using session chat history.
+- Expose session-scoped LLM and retrieval controls from backend runtime config.
+- Manage stored sessions from the UI: list, switch, delete, and start new session.
 
-## Local Setup and Run
+## Architecture At A Glance
+
+- Backend: FastAPI app with routers for config, upload, chat, and session management.
+- Frontend: Streamlit app with runtime-driven controls and uploader sync callbacks.
+- Orchestration: LangGraph state machine for direct answer vs retrieval workflow.
+- Retrieval: BM25 lexical index + FAISS semantic index with weighted reciprocal rank fusion.
+
+## Local Setup
 
 1. Install dependencies.
 
 ```bash
 uv sync
 ```
-
 On macOS, need to install `faiss-cpu` separately due to `uv` constraints:
 
 ```bash
 uv pip install faiss-cpu
 ```
 
-2. Create environment file and set OpenRouter API key.
+2. Create and edit environment file.
 
 ```bash
 cp .env.example .env
 ```
 
-3. Run FastAPI backend.
+Required values in `.env`:
+
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_MODEL`
+
+Optional runtime tuning values are documented in `.env.example`.
+
+3. Start backend.
 
 ```bash
 uv run uvicorn project.backend.app.main:app --reload --port 8000
 ```
 
-4. Run Streamlit frontend.
+4. Start frontend.
 
 ```bash
 uv run streamlit run project/frontend/app.py --server.port 8511
@@ -51,113 +63,82 @@ uv run streamlit run project/frontend/app.py --server.port 8511
 uv run pytest project/tests -q
 ```
 
-## Project Structure
+## LangGraph Flow
+
+Core nodes:
+
+1. `ingest_upload`
+2. `query_router`
+3. `rewrite_query` (search path)
+4. `lexical_retrieve`
+5. `semantic_retrieve`
+6. `fuse_results`
+7. `compress_context`
+8. `answer_question`
+9. `evaluate_answer`
+10. `fallback`
+
+Routing behavior:
+
+- If no documents are available in session, route to `direct` answer path.
+- If document search is needed, run full retrieval pipeline.
+- If grounded answer quality is insufficient (missing evidence/citations or too low confidence), route to `fallback`.
+
+## Runtime Config And Controls
+
+- Frontend fetches safe runtime config from `GET /config`.
+- Backend is source of truth for models, defaults, and parameter constraints.
+- Config payload excludes secrets.
+- Supported controls currently include `model`, `temperature`, `top_p`, `lexical_weight`, and `semantic_weight`.
+- Retrieval weights are normalized server-side before fusion.
+
+## Session And Upload Behavior
+
+- `st.file_uploader(..., accept_multiple_files=True)` is used with on-change sync.
+- Newly selected files are uploaded immediately.
+- Deselected files are removed from backend indexes/doc state.
+- Duplicate uploads in a session are skipped via normalized key.
+- Frontend supports starting a new session, listing stored sessions, switching to a prior session, and deleting a specific session.
+
+## API Endpoints
+
+- `GET /health`
+- `GET /config`
+- `POST /upload` (multipart form: `session_id`, `files`)
+- `POST /upload/remove` (json: `session_id`, `file_keys`)
+- `POST /ask` (json: `session_id`, `question`, optional `chat_history`, `llm_settings`, `retrieval_settings`)
+- `POST /clear-session` (json: `session_id`)
+- `GET /sessions`
+- `GET /sessions/{session_id}`
+
+## Key Paths
 
 - `project/backend/app/main.py`
 - `project/backend/app/core/config.py`
 - `project/backend/app/core/llm.py`
 - `project/backend/app/core/runtime_config.py`
 - `project/backend/app/core/session_store.py`
-- `project/backend/app/graph/*`
-- `project/backend/app/routers/*`
-- `project/backend/app/services/*`
+- `project/backend/app/graph/`
+- `project/backend/app/routers/`
+- `project/backend/app/services/`
 - `project/frontend/app.py`
 - `project/frontend/api_client.py`
 - `project/frontend/utils.py`
-- `project/frontend/components/*`
-- `project/tests/*`
+- `project/frontend/components/`
+- `project/tests/`
 
-## LangGraph Architecture
+## Manual Verification Checklist
 
-Graph state tracks:
-
-- session_id
-- uploaded_files, accepted_files
-- uploaded_documents
-- chat_history
-- current_question, rewritten_query
-- lexical_results, semantic_results, fused_results
-- compressed_context
-- final_answer, citations, confidence
-- retrieval_diagnostics
-- llm_settings, effective_llm_settings
-- error
-
-Nodes:
-
-1. ingest_upload
-2. rewrite_query
-3. lexical_retrieve
-4. semantic_retrieve
-5. fuse_results
-6. compress_context
-7. answer_question
-8. evaluate_answer
-9. fallback
-
-Routing:
-
-- If no uploaded docs exist for the session, route to fallback.
-- Otherwise run hybrid retrieval and grounded answering.
-- If evidence or citations are insufficient, route to fallback.
-
-## Immediate Upload and Duplicate Skipping
-
-- Frontend uses `st.file_uploader(..., accept_multiple_files=True)`.
-- There is no manual process button.
-- On each rerun, only newly uploaded files are sent to `POST /upload`.
-- Duplicate detection uses normalized filename + extension and skips repeats.
-- Skipped duplicates are shown in the UI.
-
-## Hybrid Retrieval
-
-- Lexical retrieval: BM25 over chunk text for sparse exact-match strength.
-- Semantic retrieval: OpenRouter embeddings (`nvidia/llama-nemotron-embed-vl-1b-v2:free`) with FAISS vector store.
-- Fusion: weighted reciprocal rank fusion.
-- Diagnostics include top lexical, semantic, and fused hit summaries.
-
-## Runtime Config and OpenRouter
-
-- Backend is the source of truth for model options and defaults.
-- Configuration is centralized in `backend/app/core/config.py` with Pydantic Settings.
-- Settings are cached (`lru_cache`) to avoid reparsing `.env` on each request.
-- LLM creation is centralized in `backend/app/core/llm.py` via `get_chat_model()`.
-- Frontend fetches runtime-safe configuration from `GET /config` and never reads `.env`.
-- `GET /config` excludes secrets and returns models, defaults, supported controls, and constraints.
-
-## LLM Behavior Controls
-
-Session-scoped controls (rendered dynamically from backend config):
-
-- model
-- temperature
-- top_p
-
-Defaults are backend-provided and optimized for grounded QA (low randomness).
-
-## API Endpoints
-
-- `GET /health`
-- `GET /config`
-- `POST /upload`
-- `POST /ask`
-- `POST /clear-session`
-
-## Why Hybrid Retrieval?
-
-Hybrid retrieval combines lexical precision and semantic recall.
-It handles exact entities (IDs, names, policy language) while still catching semantically related follow-up questions.
-
-## Manual Testing Checklist
-
-- Upload two PDFs and confirm immediate processing.
-- Re-upload a normalized duplicate and confirm it is skipped.
-- Ask a question and verify answer, citations, and diagnostics.
-- Ask a follow-up and verify chat history is used.
-- Change LLM controls and confirm effective settings in the response.
-- Click Clear session and verify uploader, chat, docs, and diagnostics reset.
-- Close or hide the tab and reopen to confirm best-effort backend cleanup behavior.
+- Upload 2 PDFs and confirm immediate processing.
+- Remove one file in uploader and confirm backend document/index removal effects.
+- Re-add a previously removed file and confirm it is processed again.
+- Re-upload a duplicate normalized key and confirm it is skipped.
+- Ask a question with docs and verify citations + retrieval diagnostics.
+- Ask a follow-up and verify context continuity via chat history.
+- Change LLM/retrieval controls and verify effective settings in `/ask` response.
+- Create a new session, switch between sessions, and delete a session from sidebar.
+- Clear current session and confirm frontend/backend reset for that session.
 
 ## Privacy Notice
 
-⚠️ **Warning**: Do not upload PDFs containing personal, sensitive, or confidential information. This application processes documents using external APIs and may store data temporarily for session functionality. Only upload documents you are comfortable sharing with third-party services.
+Warning: Do not upload PDFs containing personal, sensitive, or confidential information. This app calls external LLM/embedding services and stores session data in memory for app functionality.
