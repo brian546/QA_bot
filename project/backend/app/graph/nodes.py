@@ -65,6 +65,9 @@ class GraphNodes:
         return state
 
     def query_router(self, state: GraphState) -> GraphState:
+        """
+        Decide whether to route directly to answer generation or through the retrieval path based on the presence of uploaded documents and the nature of the question. This allows for efficient handling of questions that may not require retrieval while ensuring that document-based questions are properly processed.
+        """
         llm_settings = validate_and_merge_llm_settings(self.settings, state.get("llm_settings"))
         self._resolve_retrieval_settings(state)
         docs_available = bool(state.get("uploaded_documents"))
@@ -86,6 +89,10 @@ class GraphNodes:
         return state
 
     def rewrite_query(self, state: GraphState) -> GraphState:
+        """
+        Rewrite the current question into a standalone query using the chat history.
+        This helps in providing context-aware answers while maintaining clarity and relevance.
+        """
         llm_settings = state.get("llm_settings") or validate_and_merge_llm_settings(
             self.settings, state.get("llm_settings")
         )
@@ -100,6 +107,10 @@ class GraphNodes:
         return state
 
     def lexical_retrieve(self, state: GraphState) -> GraphState:
+        """
+        Perform lexical retrieval based on the rewritten query or the current question.
+        This method uses the session's lexical index to find relevant chunks of text.
+        """
         session = self.session_store.get_or_create(state["session_id"])
         query = state.get("rewritten_query") or state.get("current_question", "")
         results = retrieve_lexical(query, session.chunks, session.lexical_index, self.settings.retrieval_lexical_k)
@@ -107,6 +118,10 @@ class GraphNodes:
         return state
 
     def semantic_retrieve(self, state: GraphState) -> GraphState:
+        """
+        Perform semantic retrieval based on the rewritten query or the current question.
+        This method uses the session's semantic index to find relevant chunks of text.
+        """
         session = self.session_store.get_or_create(state["session_id"])
         query = state.get("rewritten_query") or state.get("current_question", "")
         results = retrieve_semantic(query, session.semantic_index, self.settings.retrieval_semantic_k)
@@ -114,6 +129,10 @@ class GraphNodes:
         return state
 
     def fuse_results(self, state: GraphState) -> GraphState:
+        """
+        Fuse lexical and semantic retrieval results using reciprocal rank fusion.
+        This method combines the strengths of both retrieval strategies to produce a more comprehensive set of results.
+        """
         lexical = state.get("lexical_results", [])
         semantic = state.get("semantic_results", [])
         retrieval_settings = state.get("retrieval_settings") or self._resolve_retrieval_settings(state)
