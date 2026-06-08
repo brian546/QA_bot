@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from langchain_ollama import ChatOllama
 from langchain_openrouter import ChatOpenRouter
 
 from project.backend.app.core.config import Settings
@@ -36,9 +37,20 @@ def validate_and_merge_llm_settings(settings: Settings, overrides: dict[str, Any
     return merged
 
 
-def get_chat_model(settings: Settings, llm_settings: dict[str, Any] | None = None) -> ChatOpenRouter:
-    """Create a shared OpenRouter chat model from validated settings."""
+def get_chat_model(settings: Settings, llm_settings: dict[str, Any] | None = None) -> Any:
+    """Create a provider-aware chat model from validated settings."""
     effective = validate_and_merge_llm_settings(settings, llm_settings)
+    if settings.llm_provider == "ollama":
+        timeout = float(settings.ollama_timeout)
+        return ChatOllama(
+            model=effective["model"],
+            base_url=settings.ollama_base_url,
+            temperature=effective["temperature"],
+            top_p=effective["top_p"],
+            client_kwargs={"timeout": timeout},
+            sync_client_kwargs={"timeout": timeout},
+        )
+
     return ChatOpenRouter(
         api_key=settings.openrouter_api_key,
         model=effective["model"],

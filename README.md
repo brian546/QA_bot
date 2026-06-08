@@ -1,6 +1,6 @@
 # Hybrid Multi-Document QA MVP
 
-Grounded multi-document question answering app built with FastAPI, Streamlit, LangGraph, LangChain, and OpenRouter.
+Grounded multi-document question answering app built with FastAPI, Streamlit, LangGraph, and LangChain. Supports OpenRouter and Ollama providers.
 
 ## What It Does
 
@@ -39,10 +39,19 @@ uv pip install faiss-cpu
 cp .env.example .env
 ```
 
-Required values in `.env`:
+Required values in `.env` depend on selected providers:
 
-- `OPENROUTER_API_KEY`
-- `OPENROUTER_MODEL`
+- Agent model provider uses `LLM_PROVIDER`.
+- Embedding provider uses `EMBEDDING_PROVIDER` (defaults to `LLM_PROVIDER` when omitted).
+- OpenRouter usage requires `OPENROUTER_API_KEY`.
+
+Examples:
+
+- OpenRouter for both: `LLM_PROVIDER=openrouter` and `EMBEDDING_PROVIDER=openrouter`
+- Ollama for both: `LLM_PROVIDER=ollama` and `EMBEDDING_PROVIDER=ollama`
+- Mixed mode (requested): `LLM_PROVIDER=ollama` and `EMBEDDING_PROVIDER=openrouter`
+
+For Ollama, keep Ollama server running locally (`ollama serve`) and pull models first (for example `ollama pull gemma4:26b` and `ollama pull nomic-embed-text`).
 
 Optional runtime tuning values are documented in `.env.example`.
 
@@ -88,7 +97,7 @@ Routing behavior:
 ## Runtime Config And Controls
 
 - Frontend fetches safe runtime config from `GET /config`.
-- Backend is source of truth for models, defaults, and parameter constraints.
+- Backend is source of truth for provider, models, defaults, and parameter constraints.
 - Config payload excludes secrets.
 - Supported controls currently include `model`, `temperature`, `top_p`, `lexical_weight`, `semantic_weight`, and `citations_k`.
 - Retrieval weights are normalized server-side before fusion.

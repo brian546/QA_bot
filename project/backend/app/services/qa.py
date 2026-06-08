@@ -80,10 +80,11 @@ def should_search_documents(
         "Return SEARCH or DIRECT."
     )
 
-    llm_settings["temperature"] = 0
+    router_settings = dict(llm_settings or {})
+    router_settings["temperature"] = 0
 
     try:
-        model = get_chat_model(settings, llm_settings)
+        model = get_chat_model(settings, router_settings)
         response = model.invoke([SystemMessage(content=ROUTER_SYSTEM), HumanMessage(content=prompt)])
         decision = str(response.content).strip().upper()
         if "SEARCH" in decision:
@@ -209,10 +210,11 @@ def is_answer_confident(
         "Return CONFIDENT or NOT_CONFIDENT."
     )
 
-    llm_settings["temperature"] = 0
+    confidence_settings = dict(llm_settings or {})
+    confidence_settings["temperature"] = 0
 
     try:
-        model = get_chat_model(settings, llm_settings)
+        model = get_chat_model(settings, confidence_settings)
         response = model.invoke([SystemMessage(content=CONFIDENCE_EVAL_SYSTEM), HumanMessage(content=prompt)])
         verdict = str(response.content).strip().upper()
         if "NOT_CONFIDENT" in verdict:

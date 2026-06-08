@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from project.backend.app.core.config import get_settings, require_openrouter_api_key
+from project.backend.app.core.config import get_settings, require_llm_provider_configuration
 from project.backend.app.core.session_store import session_store
 from project.backend.app.graph.builder import build_graph
 from project.backend.app.routers import chat, config, session, upload
@@ -12,7 +12,7 @@ from project.backend.app.schemas.response import HealthResponse
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    require_openrouter_api_key(settings)
+    require_llm_provider_configuration(settings)
 
     app = FastAPI(title=settings.app_name, version=settings.app_version)
     app.add_middleware(

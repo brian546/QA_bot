@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
+from langchain_ollama import OllamaEmbeddings
 
 from project.backend.app.core.config import Settings, get_settings
+
+
+logger = logging.getLogger(__name__)
 
 
 class OpenRouterEmbeddings(Embeddings):
@@ -114,14 +119,27 @@ def build_documents(chunks: list[dict[str, Any]]) -> list[Document]:
     return docs
 
 
+def get_embeddings_client(settings: Settings) -> Embeddings:
+    if settings.embedding_provider == "ollama":
+        return OllamaEmbeddings(
+            model=settings.active_embedding_model(),
+            base_url=settings.ollama_base_url,
+        )
+    return OpenRouterEmbeddings.from_settings(settings)
+
+
 def build_faiss_index(chunks: list[dict[str, Any]], embedding_dim: int) -> FAISS | None:
     if not chunks:
         return None
     docs = build_documents(chunks)
     _ = embedding_dim
     settings = get_settings()
-    embeddings = OpenRouterEmbeddings.from_settings(settings)
-    return FAISS.from_documents(docs, embeddings)
+    embeddings = get_embeddings_client(settings)
+    try:
+        return FAISS.from_documents(docs, embeddings)
+    except Exception as exc:
+        logger.warning("Semantic index build failed; using lexical retrieval only: %s", exc)
+        return None
 
 
 def retrieve_semantic(query: str, index: FAISS | None, top_k: int) -> list[dict[str, Any]]:

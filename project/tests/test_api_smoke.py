@@ -111,3 +111,28 @@ def test_upload_accepts_multiple_text_document_formats() -> None:
     assert current.processed_files == {"notes.txt", "readme.md", "table.csv", "table.xlsx"}
     assert len(current.uploaded_documents) == 4
     assert len(current.chunks) >= 4
+
+
+def test_upload_succeeds_when_semantic_index_build_fails(monkeypatch) -> None:
+    app = create_app()
+    client = TestClient(app)
+
+    def _raise_index_error(*args, **kwargs):
+        raise RuntimeError("embedding backend unavailable")
+
+    monkeypatch.setattr("project.backend.app.services.semantic_retrieval.FAISS.from_documents", _raise_index_error)
+
+    response = client.post(
+        "/upload",
+        data={"session_id": "semantic-fallback"},
+        files=[("files", ("notes.txt", b"alpha line\nbeta line", "text/plain"))],
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["accepted_files"] == ["notes.txt"]
+
+    current = app.state.session_store.get("semantic-fallback")
+    assert current is not None
+    assert current.lexical_index is not None
+    assert current.semantic_index is None

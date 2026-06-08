@@ -57,9 +57,13 @@ class SessionDetailResponse(BaseModel):
 
 
 class RuntimeConfigResponse(BaseModel):
+    agent_provider_name: str
     provider_name: str
+    embedding_provider_name: str
+    embedding_provider: str
     available_models: list[str]
     default_model: str
+    default_embedding_model: str
     default_llm_settings: dict[str, Any]
     default_retrieval_settings: dict[str, Any]
     default_citations_k: int
