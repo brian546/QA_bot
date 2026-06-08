@@ -134,7 +134,7 @@ def compress_evidence(
         return ""
 
     evidence_block = "\n\n".join(
-        f"[{row.get('chunk_id')}] {row.get('text', '')}" for row in fused_rows[:8]
+        f"[{row.get('chunk_id')}] {row.get('text', '')}" for row in fused_rows
     )
     prompt = f"Question:\n{question}\n\nEvidence:\n{evidence_block}\n\nCompressed evidence:"
     try:
@@ -196,15 +196,15 @@ def is_answer_confident(
     if not answer.strip() or not citations or not compressed_context.strip():
         return False
 
-    citation_preview = "\n".join(
-        f"- {c.get('filename', 'unknown')} p.{c.get('page', '?')} {c.get('chunk_id', '')}"
-        for c in citations[:8]
-    )
+    # citation_preview = "\n".join(
+    #     f"- {c.get('filename', 'unknown')} p.{c.get('page', '?')} {c.get('chunk_id', '')}"
+    #     for c in citations[:8]
+    # )
     prompt = (
         f"Question:\n{question}\n\n"
         f"Answer:\n{answer}\n\n"
         f"Compressed evidence:\n{compressed_context}\n\n"
-        f"Citations:\n{citation_preview}\n\n"
+        # f"Citations:\n{citation_preview}\n\n"
         "Return CONFIDENT or NOT_CONFIDENT."
     )
 

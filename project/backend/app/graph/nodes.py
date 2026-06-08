@@ -51,7 +51,7 @@ class GraphNodes:
                 "semantic_weight": semantic_weight / total,
             }
 
-        state["effective_retrieval_settings"] = resolved
+        state["retrieval_settings"] = resolved
         return resolved
 
     def ingest_upload(self, state: GraphState) -> GraphState:
@@ -77,13 +77,13 @@ class GraphNodes:
         if not docs_available:
             needs_search = False
 
-        state["effective_llm_settings"] = llm_settings
+        state["llm_settings"] = llm_settings
         state["needs_document_search"] = needs_search
         state["route_decision"] = "search" if needs_search else "direct"
         return state
 
     def rewrite_query(self, state: GraphState) -> GraphState:
-        llm_settings = state.get("effective_llm_settings") or validate_and_merge_llm_settings(
+        llm_settings = state.get("llm_settings") or validate_and_merge_llm_settings(
             self.settings, state.get("llm_settings")
         )
         rewritten = rewrite_query_with_history(
@@ -93,7 +93,7 @@ class GraphNodes:
             llm_settings,
         )
         state["rewritten_query"] = rewritten
-        state["effective_llm_settings"] = llm_settings
+        state["llm_settings"] = llm_settings
         return state
 
     def lexical_retrieve(self, state: GraphState) -> GraphState:
@@ -113,7 +113,7 @@ class GraphNodes:
     def fuse_results(self, state: GraphState) -> GraphState:
         lexical = state.get("lexical_results", [])
         semantic = state.get("semantic_results", [])
-        retrieval_settings = state.get("effective_retrieval_settings") or self._resolve_retrieval_settings(state)
+        retrieval_settings = state.get("retrieval_settings") or self._resolve_retrieval_settings(state)
         fused = reciprocal_rank_fusion(
             lexical,
             semantic,
@@ -131,7 +131,7 @@ class GraphNodes:
         return state
 
     def compress_context(self, state: GraphState) -> GraphState:
-        llm_settings = state.get("effective_llm_settings", {})
+        llm_settings = state.get("llm_settings", {})
         compressed = compress_evidence(
             self.settings,
             state.get("current_question", ""),
@@ -147,7 +147,7 @@ class GraphNodes:
                 self.settings,
                 state.get("current_question", ""),
                 state.get("chat_history", []),
-                state.get("effective_llm_settings", {}),
+                state.get("llm_settings", {}),
             )
             state["final_answer"] = answer
             state["citations"] = []
@@ -167,7 +167,7 @@ class GraphNodes:
             state.get("current_question", ""),
             state.get("compressed_context", ""),
             state.get("fused_results", []),
-            state.get("effective_llm_settings", {}),
+            state.get("llm_settings", {}),
             citation_limit,
         )
         state["final_answer"] = answer
@@ -193,7 +193,7 @@ class GraphNodes:
             state["error"] = "Insufficient evidence for grounded answer."
             return state
 
-        llm_settings = state.get("effective_llm_settings") or validate_and_merge_llm_settings(
+        llm_settings = state.get("llm_settings") or validate_and_merge_llm_settings(
             self.settings, state.get("llm_settings")
         )
         confident = is_answer_confident(

@@ -38,8 +38,8 @@ def ask_question(payload: AskRequest, request: Request) -> AskResponse:
 
     result = graph.invoke(input_state)
     session.graph_state = result
-    session.llm_settings = effective_llm_settings
-    session.retrieval_settings = result.get("effective_retrieval_settings", {})
+    session.llm_settings = result.get("llm_settings", effective_llm_settings)
+    session.retrieval_settings = result.get("retrieval_settings", session.retrieval_settings)
 
     session.chat_history.append({"role": "user", "content": payload.question})
     session.chat_history.append({"role": "assistant", "content": result.get("final_answer", "")})
@@ -51,6 +51,6 @@ def ask_question(payload: AskRequest, request: Request) -> AskResponse:
             "retrieval_diagnostics",
             {"lexical_hits": [], "semantic_hits": [], "fused_hits": []},
         ),
-        effective_llm_settings=result.get("effective_llm_settings", effective_llm_settings),
-        effective_retrieval_settings=result.get("effective_retrieval_settings", session.retrieval_settings),
+        effective_llm_settings=result.get("llm_settings", effective_llm_settings),
+        effective_retrieval_settings=result.get("retrieval_settings", session.retrieval_settings),
     )
