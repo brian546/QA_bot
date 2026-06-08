@@ -27,6 +27,9 @@ class GraphNodes:
         self.session_store = session_store
 
     def _resolve_retrieval_settings(self, state: GraphState) -> dict[str, float]:
+        """
+        Normalizing lexical and semantic weights to sum to 1.0, with defaults and bounds applied. This allows dynamic adjustment of retrieval strategy while ensuring valid weight distribution. If both weights are zero or negative, they will be reset to equal values to avoid division errors and ensure a balanced fusion of results.
+        """
         defaults = {
             "lexical_weight": float(self.settings.lexical_weight),
             "semantic_weight": float(self.settings.semantic_weight),
