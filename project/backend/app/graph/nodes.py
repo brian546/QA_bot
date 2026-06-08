@@ -93,17 +93,13 @@ class GraphNodes:
         Rewrite the current question into a standalone query using the chat history.
         This helps in providing context-aware answers while maintaining clarity and relevance.
         """
-        llm_settings = state.get("llm_settings") or validate_and_merge_llm_settings(
-            self.settings, state.get("llm_settings")
-        )
         rewritten = rewrite_query_with_history(
             self.settings,
             state.get("current_question", ""),
             state.get("chat_history", []),
-            llm_settings,
+            state.get("llm_settings", {}),
         )
         state["rewritten_query"] = rewritten
-        state["llm_settings"] = llm_settings
         return state
 
     def lexical_retrieve(self, state: GraphState) -> GraphState:
@@ -153,12 +149,11 @@ class GraphNodes:
         return state
 
     def compress_context(self, state: GraphState) -> GraphState:
-        llm_settings = state.get("llm_settings", {})
         compressed = compress_evidence(
             self.settings,
             state.get("current_question", ""),
             state.get("fused_results", []),
-            llm_settings,
+            state.get("llm_settings", {}),
         )
         state["compressed_context"] = compressed
         return state
@@ -215,16 +210,13 @@ class GraphNodes:
             state["error"] = "Insufficient evidence for grounded answer."
             return state
 
-        llm_settings = state.get("llm_settings") or validate_and_merge_llm_settings(
-            self.settings, state.get("llm_settings")
-        )
         confident = is_answer_confident(
             self.settings,
             state.get("current_question", ""),
             state.get("final_answer", ""),
             state.get("compressed_context", ""),
             state.get("citations", []),
-            llm_settings,
+            state.get("llm_settings", {}),
         )
         state["answer_is_confident"] = confident
 

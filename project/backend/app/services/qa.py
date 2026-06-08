@@ -79,7 +79,8 @@ def should_search_documents(
         f"Question:\n{question}\n\n"
         "Return SEARCH or DIRECT."
     )
-    settings["temperature"] = 0
+
+    llm_settings["temperature"] = 0
 
     try:
         model = get_chat_model(settings, llm_settings)
@@ -190,7 +191,7 @@ def is_answer_confident(
     answer: str,
     compressed_context: str,
     citations: list[dict[str, Any]],
-    llm_settings: dict[str, Any],
+    llm_settings: dict[str, Any] | None,
 ) -> bool:
     """Use the model to classify whether the grounded answer is confident."""
     if not answer.strip() or not citations or not compressed_context.strip():
@@ -208,7 +209,7 @@ def is_answer_confident(
         "Return CONFIDENT or NOT_CONFIDENT."
     )
 
-    settings["temperature"] = 0
+    llm_settings["temperature"] = 0
 
     try:
         model = get_chat_model(settings, llm_settings)
