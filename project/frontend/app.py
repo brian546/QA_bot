@@ -162,7 +162,7 @@ def main() -> None:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    question = st.chat_input("Ask a question about your uploaded documents")
+    question = st.chat_input("Ask a question")
     if question:
         st.session_state.messages.append({"role": "user", "content": question})
         with st.chat_message("user"):
