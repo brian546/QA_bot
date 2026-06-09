@@ -7,9 +7,11 @@ from typing import Any
 def reciprocal_rank_fusion(
     lexical_results: list[dict[str, Any]],
     semantic_results: list[dict[str, Any]],
+    *,
     lexical_weight: float,
     semantic_weight: float,
     top_k: int,
+    image_results: list[dict[str, Any]] | None = None,
     rank_constant: int = 60,
 ) -> list[dict[str, Any]]:
     """Fuse retrieval results with weighted reciprocal rank fusion."""
@@ -27,6 +29,13 @@ def reciprocal_rank_fusion(
         if chunk_id not in merged_rows:
             merged_rows[chunk_id] = row
 
+    if image_results:
+        for rank, row in enumerate(image_results, start=1):
+            chunk_id = str(row.get("chunk_id") or row.get("asset_id") or f"image:{row.get('filename', '')}:{row.get('page', '')}")
+            fused_scores[chunk_id] += semantic_weight / (rank_constant + rank)
+            if chunk_id not in merged_rows:
+                merged_rows[chunk_id] = row
+
     ranked_chunk_ids = sorted(fused_scores.keys(), key=lambda cid: fused_scores[cid], reverse=True)
 
     fused: list[dict[str, Any]] = []
@@ -43,6 +52,7 @@ def build_diagnostics(
     semantic_results: list[dict[str, Any]],
     fused_results: list[dict[str, Any]],
     top_k: int = 5,
+    image_results: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     effective_top_k = max(1, int(top_k))
 
@@ -62,5 +72,6 @@ def build_diagnostics(
     return {
         "lexical_hits": summarize(lexical_results),
         "semantic_hits": summarize(semantic_results),
+        "image_hits": summarize(image_results or []),
         "fused_hits": summarize(fused_results),
     }

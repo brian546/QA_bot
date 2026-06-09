@@ -14,6 +14,8 @@ def test_runtime_config_endpoint_hides_secrets() -> None:
     assert "available_models" in payload
     assert "default_llm_settings" in payload
     assert "default_citations_k" in payload
+    assert "asset_storage_backend" in payload
+    assert "default_image_embedding_model" in payload
     assert "citations_k" in payload.get("parameter_constraints", {})
     assert "openrouter_api_key" not in payload
 

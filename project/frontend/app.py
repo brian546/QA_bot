@@ -24,6 +24,7 @@ from project.frontend.utils import (
     clear_session_state,
     ensure_state,
     handle_uploader_change,
+    resync_uploader_selection,
     reset_llm_settings_to_defaults,
     start_new_session_state,
     switch_session_state,
@@ -136,19 +137,24 @@ def main() -> None:
         st.rerun()
 
     uploader_state_key = f"uploader_files_{st.session_state.uploader_key}"
-    uploader_label = "Upload documents (PDF, TXT, MD, CSV, DOCX, PPTX, XLSX)"
+    uploader_label = "Upload documents and images (PDF, TXT, MD, CSV, DOCX, PPTX, XLSX, PNG, JPG, GIF, WEBP)"
     if st.session_state.uploaded_docs:
-        loaded_names = ", ".join(str(doc.get("filename", "unknown")) for doc in st.session_state.uploaded_docs)
+        loaded_names = ", ".join(
+            f"{str(doc.get('filename', 'unknown'))} [{str(doc.get('modality', 'text'))}]"
+            for doc in st.session_state.uploaded_docs
+        )
         uploader_label = f"{uploader_label}\n\nLoaded in this session: {loaded_names}"
 
     st.file_uploader(
         uploader_label,
-        type=["pdf", "txt", "md", "markdown", "csv", "docx", "pptx", "xlsx"],
+        type=["pdf", "txt", "md", "markdown", "csv", "docx", "pptx", "xlsx", "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff"],
         accept_multiple_files=True,
         key=uploader_state_key,
         on_change=handle_uploader_change,
         args=(client, uploader_state_key),
     )
+
+    resync_uploader_selection(client, uploader_state_key)
 
     feedback = st.session_state.upload_feedback
     if feedback.get("accepted"):
@@ -157,6 +163,15 @@ def main() -> None:
         st.info(f"Removed: {', '.join(feedback['removed'])}")
     if feedback.get("error"):
         st.error(str(feedback["error"]))
+
+    if st.session_state.uploaded_docs:
+        with st.expander("Uploaded assets", expanded=False):
+            for asset in st.session_state.uploaded_docs:
+                modality = str(asset.get("modality", "text"))
+                filename = str(asset.get("filename", "unknown"))
+                page_count = int(asset.get("page_count", 0))
+                chunk_count = int(asset.get("chunk_count", 0))
+                st.markdown(f"- **{filename}** — {modality}, pages: {page_count}, chunks: {chunk_count}")
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -187,6 +202,17 @@ def main() -> None:
             st.session_state.citations = response.get("citations", [])
             st.session_state.retrieval_diagnostics = response.get("retrieval_diagnostics", {})
             citations = response.get("citations", [])
+
+            if citations:
+                with st.expander("Citations", expanded=False):
+                    for citation in citations:
+                        filename = str(citation.get("filename", "unknown"))
+                        page = citation.get("page")
+                        modality = str(citation.get("modality", "text"))
+                        st.markdown(f"- **{filename}** p.{page} [{modality}] {citation.get('chunk_id', '')}")
+                        image_data_url = str(citation.get("image_data_url", ""))
+                        if image_data_url.startswith("data:image/"):
+                            st.image(image_data_url, caption=filename, use_container_width=True)
 
             if citations:
                 with st.expander("Retrieval diagnostics", expanded=False):

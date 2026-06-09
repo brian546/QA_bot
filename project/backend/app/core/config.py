@@ -28,6 +28,8 @@ class Settings(BaseSettings):
         default="nvidia/llama-nemotron-embed-vl-1b-v2:free",
         alias="OPENROUTER_EMBEDDING_MODEL",
     )
+    openrouter_image_embedding_model: str = Field(default="", alias="OPENROUTER_IMAGE_EMBEDDING_MODEL")
+    openrouter_vision_model: str = Field(default="", alias="OPENROUTER_VISION_MODEL")
     openrouter_allowed_models_raw: str = Field(default="", alias="OPENROUTER_ALLOWED_MODELS")
     openrouter_timeout: int = Field(default=45, alias="OPENROUTER_TIMEOUT")
     openrouter_max_retries: int = Field(default=1, alias="OPENROUTER_MAX_RETRIES")
@@ -53,6 +55,9 @@ class Settings(BaseSettings):
     max_chunk_chars: int = Field(default=1200, alias="MAX_CHUNK_CHARS")
     chunk_overlap: int = Field(default=180, alias="CHUNK_OVERLAP")
     max_upload_bytes: int = Field(default=20_000_000, alias="MAX_UPLOAD_BYTES")
+    asset_storage_backend: str = Field(default="memory", alias="ASSET_STORAGE_BACKEND")
+    asset_storage_path: str = Field(default=".pdfrag-assets", alias="ASSET_STORAGE_PATH")
+    enable_pdf_page_image_extraction: bool = Field(default=True, alias="ENABLE_PDF_PAGE_IMAGE_EXTRACTION")
 
     embedding_dimension: int = 256
 
@@ -68,6 +73,13 @@ class Settings(BaseSettings):
             raise ValueError(f"{field_name} must be either 'openrouter' or 'ollama'")
         return normalized
 
+    @staticmethod
+    def _normalize_storage_backend(value: str, field_name: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"memory", "filesystem"}:
+            raise ValueError(f"{field_name} must be either 'memory' or 'filesystem'")
+        return normalized
+
     @model_validator(mode="after")
     def _validate_citation_bounds(self) -> "Settings":
         self.llm_provider = self._normalize_provider(self.llm_provider, "LLM_PROVIDER")
@@ -77,6 +89,8 @@ class Settings(BaseSettings):
         else:
             # Default embedding provider to the agent provider for backward compatibility.
             self.embedding_provider = self.llm_provider
+
+        self.asset_storage_backend = self._normalize_storage_backend(self.asset_storage_backend, "ASSET_STORAGE_BACKEND")
 
         if self.citations_max_k < 1:
             raise ValueError("CITATIONS_MAX_K must be at least 1")
@@ -114,6 +128,16 @@ class Settings(BaseSettings):
         if self.embedding_provider == "openrouter":
             return self.openrouter_embedding_model.strip() or self.openrouter_model
         return self.ollama_embedding_model.strip() or self.ollama_model
+
+    def active_image_embedding_model(self) -> str:
+        if self.openrouter_image_embedding_model.strip():
+            return self.openrouter_image_embedding_model.strip()
+        return self.active_embedding_model()
+
+    def active_vision_model(self) -> str:
+        if self.openrouter_vision_model.strip():
+            return self.openrouter_vision_model.strip()
+        return self.active_llm_model()
 
     def _parse_allowed_models(self, raw: str, default_model: str) -> list[str]:
         raw = raw.strip()

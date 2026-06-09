@@ -23,6 +23,20 @@ ANSWER_SYSTEM = (
     "If evidence is insufficient, say so clearly. Always include citations [filename p.X chunk_id]."
 )
 
+IMAGE_KEYWORDS = (
+    "image",
+    "photo",
+    "picture",
+    "screenshot",
+    "figure",
+    "diagram",
+    "chart",
+    "illustration",
+    "visual",
+    "look at",
+    "show me",
+)
+
 ROUTER_SYSTEM = (
     "You are a routing classifier. Decide if a user question requires searching uploaded documents. "
     "Respond with exactly one token: SEARCH or DIRECT. "
@@ -41,6 +55,38 @@ CONFIDENCE_EVAL_SYSTEM = (
     "Choose CONFIDENT only when the answer is clearly supported by the provided evidence and citations. "
     "Choose NOT_CONFIDENT when evidence is weak, missing, contradictory, or the answer is speculative."
 )
+
+
+def _build_image_human_content(
+    prompt: str,
+    rows: list[dict[str, Any]],
+    effective_limit: int,
+    llm_provider: str,
+    intro_suffix: str,
+) -> list[dict[str, Any]]:
+    """Build multimodal human content by attaching raw image payloads with evidence labels."""
+    human_content: list[dict[str, Any]] = [{"type": "text", "text": prompt + intro_suffix}]
+
+    for row in rows[:effective_limit]:
+        image_data_url = str(row.get("image_data_url", ""))
+        if not image_data_url.startswith("data:image/"):
+            continue
+
+        human_content.append(
+            {
+                "type": "text",
+                "text": (
+                    f"Image evidence: {row.get('filename', 'unknown')} p.{row.get('page', '?')} "
+                    f"{row.get('asset_id') or row.get('chunk_id', '')}"
+                ),
+            }
+        )
+        if llm_provider == "ollama":
+            human_content.append({"type": "image_url", "image_url": image_data_url})
+        else:
+            human_content.append({"type": "image_url", "image_url": {"url": image_data_url}})
+
+    return human_content
 
 
 def rewrite_query_with_history(
@@ -96,7 +142,7 @@ def should_search_documents(
 
     # Conservative heuristic fallback if router model is unavailable.
     lowered = question.lower()
-    keywords = ("pdf", "document", "uploaded", "file", "page", "policy", "contract", "report")
+    keywords = ("pdf", "document", "uploaded", "file", "page", "policy", "contract", "report", *IMAGE_KEYWORDS)
     return any(token in lowered for token in keywords)
 
 
@@ -135,9 +181,7 @@ def compress_evidence(
     if not fused_rows:
         return ""
 
-    evidence_block = "\n\n".join(
-        f"[{row.get('chunk_id')}] {row.get('text', '')}" for row in fused_rows
-    )
+    evidence_block = "\n\n".join(f"[{row.get('chunk_id')}] {row.get('text', '')}" for row in fused_rows)
     prompt = f"Question:\n{question}\n\nEvidence:\n{evidence_block}\n\nCompressed evidence:"
     try:
         model = get_chat_model(settings, llm_settings)
@@ -164,11 +208,16 @@ def answer_with_evidence(
             "filename": row.get("filename"),
             "page": row.get("page"),
             "section": row.get("section"),
+            "asset_id": row.get("asset_id"),
+            "modality": row.get("modality", "text"),
+            "image_data_url": row.get("image_data_url"),
+            "storage_uri": row.get("storage_uri"),
         }
         for row in fused_rows[:effective_limit]
     ]
 
-    if not compressed_context.strip():
+    has_image_evidence = any(str(row.get("image_data_url", "")).startswith("data:image/") for row in fused_rows)
+    if not compressed_context.strip() and not has_image_evidence:
         return "I could not find enough evidence in the uploaded documents.", []
 
     prompt = (
@@ -178,8 +227,20 @@ def answer_with_evidence(
     )
     try:
         model = get_chat_model(settings, llm_settings)
-        response = model.invoke([SystemMessage(content=ANSWER_SYSTEM), HumanMessage(content=prompt)])
+
+        if has_image_evidence:
+            human_content = _build_image_human_content(
+                prompt,
+                fused_rows,
+                effective_limit,
+                settings.llm_provider,
+                "\n\nInspect the attached images directly before answering.",
+            )
+            response = model.invoke([SystemMessage(content=ANSWER_SYSTEM), HumanMessage(content=human_content)])
+        else:
+            response = model.invoke([SystemMessage(content=ANSWER_SYSTEM), HumanMessage(content=prompt)])
         answer = str(response.content).strip()
+        print(answer)
     except Exception:
         answer = "Based on the retrieved evidence, here is the most likely answer:\n" + compressed_context[:1200]
 
@@ -195,18 +256,15 @@ def is_answer_confident(
     llm_settings: dict[str, Any] | None,
 ) -> bool:
     """Use the model to classify whether the grounded answer is confident."""
-    if not answer.strip() or not citations or not compressed_context.strip():
+    has_image_citation = any(str(c.get("modality", "")).lower() == "image" for c in citations)
+    if not answer.strip() or not citations or (not compressed_context.strip() and not has_image_citation):
         return False
 
-    # citation_preview = "\n".join(
-    #     f"- {c.get('filename', 'unknown')} p.{c.get('page', '?')} {c.get('chunk_id', '')}"
-    #     for c in citations[:8]
-    # )
+    effective_limit = max(1, min(8, len(citations)))
     prompt = (
         f"Question:\n{question}\n\n"
         f"Answer:\n{answer}\n\n"
         f"Compressed evidence:\n{compressed_context}\n\n"
-        # f"Citations:\n{citation_preview}\n\n"
         "Return CONFIDENT or NOT_CONFIDENT."
     )
 
@@ -215,7 +273,17 @@ def is_answer_confident(
 
     try:
         model = get_chat_model(settings, confidence_settings)
-        response = model.invoke([SystemMessage(content=CONFIDENCE_EVAL_SYSTEM), HumanMessage(content=prompt)])
+        if has_image_citation:
+            human_content = _build_image_human_content(
+                prompt,
+                citations,
+                effective_limit,
+                settings.llm_provider,
+                "\n\nUse the compressed text evidence and inspect the attached images before deciding.",
+            )
+            response = model.invoke([SystemMessage(content=CONFIDENCE_EVAL_SYSTEM), HumanMessage(content=human_content)])
+        else:
+            response = model.invoke([SystemMessage(content=CONFIDENCE_EVAL_SYSTEM), HumanMessage(content=prompt)])
         verdict = str(response.content).strip().upper()
         if "NOT_CONFIDENT" in verdict:
             return False
@@ -225,6 +293,7 @@ def is_answer_confident(
         pass
 
     lowered = answer.lower()
+    print(lowered)
     refusal_markers = (
         "insufficient",
         "not enough evidence",

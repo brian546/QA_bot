@@ -52,6 +52,8 @@ def clear_session(payload: dict[str, Any], request: Request) -> ClearSessionResp
         raise HTTPException(status_code=422, detail="session_id is required")
 
     store = request.app.state.session_store
+    media_store = request.app.state.media_store
+    media_store.delete_session(session_id)
     cleared = store.clear(session_id)
     # Idempotent endpoint: repeated calls are safe.
     return ClearSessionResponse(session_id=session_id, cleared=cleared)

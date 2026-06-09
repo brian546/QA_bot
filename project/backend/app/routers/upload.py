@@ -9,6 +9,8 @@ from project.backend.app.schemas.response import RemoveFilesResponse
 from project.backend.app.schemas.response import UploadResponse
 from project.backend.app.services.chunking import chunk_pages
 from project.backend.app.services.dedupe import normalize_file_key
+from project.backend.app.services.image_assets import build_image_asset_record, extract_pdf_page_images, is_image_filename
+from project.backend.app.services.image_retrieval import build_image_index
 from project.backend.app.services.lexical_retrieval import build_bm25_index
 from project.backend.app.services.parser import SUPPORTED_UPLOAD_EXTENSIONS, parse_document_pages
 from project.backend.app.services.semantic_retrieval import build_faiss_index
@@ -24,10 +26,12 @@ async def upload_files(
 ) -> UploadResponse:
     settings = request.app.state.settings
     store = request.app.state.session_store
+    media_store = request.app.state.media_store
     session = store.get_or_create(session_id)
 
     accepted_files: list[str] = []
     new_chunks: list[dict[str, object]] = []
+    new_image_chunks: list[dict[str, object]] = []
 
     for file in files:
         file_name = file.filename or ""
@@ -43,6 +47,40 @@ async def upload_files(
         if len(raw) > settings.max_upload_bytes:
             continue
 
+        session.processed_files.add(key)
+        accepted_files.append(file_name)
+
+        if is_image_filename(file_name):
+            image_asset = build_image_asset_record(
+                filename=file_name,
+                raw_bytes=raw,
+            )
+            storage_record = media_store.save(
+                session_id,
+                str(image_asset["asset_id"]),
+                file_name,
+                raw,
+                {"kind": "image"},
+            )
+            image_asset.update(
+                {
+                    "storage_uri": storage_record.storage_uri,
+                    "storage_backend": storage_record.storage_backend,
+                }
+            )
+            session.image_assets.append(image_asset)
+            session.uploaded_documents.append(
+                {
+                    "filename": file_name,
+                    "normalized_key": key,
+                    "page_count": 1,
+                    "chunk_count": 1,
+                    "modality": "image",
+                }
+            )
+            new_image_chunks.append(image_asset)
+            continue
+
         try:
             pages = parse_document_pages(raw, file_name)
         except Exception as exc:
@@ -52,16 +90,35 @@ async def upload_files(
         chunks = chunk_pages(pages, settings.max_chunk_chars, settings.chunk_overlap)
         new_chunks.extend(chunks)
 
-        session.processed_files.add(key)
-        accepted_files.append(file_name)
         session.uploaded_documents.append(
             {
                 "filename": file_name,
                 "normalized_key": key,
                 "page_count": page_count,
                 "chunk_count": len(chunks),
+                "modality": "text",
             }
         )
+
+        if ext == ".pdf" and settings.enable_pdf_page_image_extraction:
+            for page_image in extract_pdf_page_images(raw, file_name):
+                raw_bytes = page_image["raw_bytes"]
+                asset = page_image["asset"]
+                storage_record = media_store.save(
+                    session_id,
+                    str(asset["asset_id"]),
+                    file_name,
+                    raw_bytes,
+                    {"kind": "pdf_page_image"},
+                )
+                asset.update(
+                    {
+                        "storage_uri": storage_record.storage_uri,
+                        "storage_backend": storage_record.storage_backend,
+                    }
+                )
+                session.image_assets.append(asset)
+                new_image_chunks.append(asset)
 
     if new_chunks:
         session.chunks.extend(new_chunks)
@@ -69,6 +126,10 @@ async def upload_files(
         session.lexical_index = lexical_index
         session.lexical_tokens = lexical_tokens
         session.semantic_index = build_faiss_index(session.chunks, settings.embedding_dimension)
+
+    if new_image_chunks:
+        session.image_chunks.extend(new_image_chunks)
+        session.image_index = build_image_index(session.image_chunks, settings)
 
     return UploadResponse(
         session_id=session_id,
@@ -81,6 +142,7 @@ async def upload_files(
 def remove_files(payload: RemoveFilesRequest, request: Request) -> RemoveFilesResponse:
     settings = request.app.state.settings
     store = request.app.state.session_store
+    media_store = request.app.state.media_store
     session = store.get_or_create(payload.session_id)
 
     removed_files: list[str] = []
@@ -108,12 +170,23 @@ def remove_files(payload: RemoveFilesRequest, request: Request) -> RemoveFilesRe
             for chunk in session.chunks
             if normalize_file_key(str(chunk.get("filename", ""))) != key
         ]
+        session.image_assets = [
+            asset
+            for asset in session.image_assets
+            if normalize_file_key(str(asset.get("normalized_key") or asset.get("filename", ""))) != key
+        ]
+        session.image_chunks = [
+            asset
+            for asset in session.image_chunks
+            if normalize_file_key(str(asset.get("normalized_key") or asset.get("filename", ""))) != key
+        ]
         removed_files.append(key)
 
     lexical_index, lexical_tokens = build_bm25_index(session.chunks)
     session.lexical_index = lexical_index
     session.lexical_tokens = lexical_tokens
     session.semantic_index = build_faiss_index(session.chunks, settings.embedding_dimension)
+    session.image_index = build_image_index(session.image_chunks, settings)
 
     return RemoveFilesResponse(
         session_id=payload.session_id,

@@ -7,7 +7,24 @@ from collections import Counter
 
 from pypdf import PdfReader
 
-SUPPORTED_UPLOAD_EXTENSIONS = {".pdf", ".txt", ".md", ".markdown", ".csv", ".docx", ".pptx", ".xlsx"}
+SUPPORTED_UPLOAD_EXTENSIONS = {
+    ".pdf",
+    ".txt",
+    ".md",
+    ".markdown",
+    ".csv",
+    ".docx",
+    ".pptx",
+    ".xlsx",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".bmp",
+    ".tif",
+    ".tiff",
+}
 
 
 def _strip_repeated_page_edges(page_texts: list[str]) -> list[str]:

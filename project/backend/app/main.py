@@ -7,6 +7,7 @@ from project.backend.app.core.config import get_settings, require_llm_provider_c
 from project.backend.app.core.session_store import session_store
 from project.backend.app.graph.builder import build_graph
 from project.backend.app.routers import chat, config, session, upload
+from project.backend.app.services.media_store import build_media_store
 from project.backend.app.schemas.response import HealthResponse
 
 
@@ -17,7 +18,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name, version=settings.app_version)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=["http://localhost:8000"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -25,6 +26,7 @@ def create_app() -> FastAPI:
 
     app.state.settings = settings
     app.state.session_store = session_store
+    app.state.media_store = build_media_store(settings)
     app.state.graph = build_graph(settings, session_store)
 
     @app.get("/health", response_model=HealthResponse, tags=["health"])

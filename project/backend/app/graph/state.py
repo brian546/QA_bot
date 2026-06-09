@@ -8,11 +8,13 @@ class GraphState(TypedDict, total=False):
     uploaded_files: list[str]
     accepted_files: list[str]
     uploaded_documents: list[dict[str, Any]]
+    image_assets: list[dict[str, Any]]
     chat_history: list[dict[str, str]]
     current_question: str
     rewritten_query: str
     lexical_results: list[dict[str, Any]]
     semantic_results: list[dict[str, Any]]
+    image_results: list[dict[str, Any]]
     fused_results: list[dict[str, Any]]
     compressed_context: str
     final_answer: str

@@ -8,6 +8,7 @@ from project.backend.app.core.session_store import InMemorySessionStore
 from project.backend.app.graph.state import GraphState
 from project.backend.app.services.hybrid_retrieval import build_diagnostics, reciprocal_rank_fusion
 from project.backend.app.services.lexical_retrieval import retrieve_lexical
+from project.backend.app.services.image_retrieval import build_image_diagnostics, retrieve_image_assets
 from project.backend.app.services.qa import (
     answer_directly,
     answer_with_evidence,
@@ -60,9 +61,30 @@ class GraphNodes:
     def ingest_upload(self, state: GraphState) -> GraphState:
         session = self.session_store.get_or_create(state["session_id"])
         state["uploaded_documents"] = list(session.uploaded_documents)
+        state["image_assets"] = list(session.image_assets)
         state.setdefault("accepted_files", [])
         state.setdefault("uploaded_files", [])
         return state
+
+    @staticmethod
+    def _looks_like_image_question(question: str) -> bool:
+        lowered = question.lower()
+        return any(
+            token in lowered
+            for token in (
+                "image",
+                "photo",
+                "picture",
+                "screenshot",
+                "figure",
+                "diagram",
+                "chart",
+                "visual",
+                "show me",
+                "what is in",
+                "what do you see",
+            )
+        )
 
     def query_router(self, state: GraphState) -> GraphState:
         """
@@ -122,6 +144,14 @@ class GraphNodes:
         query = state.get("rewritten_query") or state.get("current_question", "")
         results = retrieve_semantic(query, session.semantic_index, self.settings.retrieval_semantic_k)
         state["semantic_results"] = results
+        image_results = retrieve_image_assets(query, session.image_index, self.settings, self.settings.retrieval_semantic_k)
+        if not image_results and session.image_assets:
+            if self._looks_like_image_question(query) or not session.chunks:
+                image_results = [
+                    dict(asset, score=0.0, source="image", modality="image")
+                    for asset in session.image_assets[: self.settings.retrieval_semantic_k]
+                ]
+        state["image_results"] = image_results
         return state
 
     def fuse_results(self, state: GraphState) -> GraphState:
@@ -138,6 +168,7 @@ class GraphNodes:
             lexical_weight=retrieval_settings["lexical_weight"],
             semantic_weight=retrieval_settings["semantic_weight"],
             top_k=max(self.settings.retrieval_lexical_k, self.settings.retrieval_semantic_k),
+            image_results=state.get("image_results", []),
         )
         state["fused_results"] = fused
         state["retrieval_diagnostics"] = build_diagnostics(
@@ -145,6 +176,7 @@ class GraphNodes:
             semantic,
             fused,
             top_k=int(self.settings.citations_max_k),
+            image_results=state.get("image_results", []),
         )
         return state
 
@@ -168,7 +200,7 @@ class GraphNodes:
             )
             state["final_answer"] = answer
             state["citations"] = []
-            state["retrieval_diagnostics"] = {"lexical_hits": [], "semantic_hits": [], "fused_hits": []}
+            state["retrieval_diagnostics"] = {"lexical_hits": [], "semantic_hits": [], "image_hits": [], "fused_hits": []}
             return state
 
         requested_citations = state.get("citations_k")
@@ -229,8 +261,8 @@ class GraphNodes:
         return state
 
     def fallback(self, state: GraphState) -> GraphState:
-        state["final_answer"] = "I could not find enough evidence in the uploaded documents."
+        state["final_answer"] = "I could not find enough evidence in the uploaded documents or images."
         state["citations"] = []
         state["answer_is_confident"] = False
-        state.setdefault("retrieval_diagnostics", {"lexical_hits": [], "semantic_hits": [], "fused_hits": []})
+        state.setdefault("retrieval_diagnostics", {"lexical_hits": [], "semantic_hits": [], "image_hits": [], "fused_hits": []})
         return state

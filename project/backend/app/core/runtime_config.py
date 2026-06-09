@@ -14,9 +14,13 @@ def build_runtime_config(settings: Settings) -> dict[str, Any]:
         "agent_provider_name": settings.provider_name(),
         "embedding_provider_name": settings.embedding_provider_name(),
         "embedding_provider": settings.embedding_provider,
+        "asset_storage_backend": settings.asset_storage_backend,
+        "asset_storage_path": settings.asset_storage_path,
         "available_models": settings.allowed_models(),
         "default_model": settings.active_llm_model(),
         "default_embedding_model": settings.active_embedding_model(),
+        "default_image_embedding_model": settings.active_image_embedding_model(),
+        "default_vision_model": settings.active_vision_model(),
         "default_llm_settings": settings.default_llm_settings(),
         "default_retrieval_settings": {
             "lexical_weight": settings.lexical_weight,

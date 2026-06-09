@@ -78,7 +78,7 @@ def normalize_file_key(filename: str) -> str:
     return f"{stem}.{ext}"
 
 
-def process_new_uploads(client: APIClient, uploaded_files: list[Any]) -> list[str]:
+def process_new_uploads(client: APIClient, uploaded_files: list[Any], *, force: bool = False) -> list[str]:
     """Process only newly uploaded files and skip duplicates in-session."""
     if not uploaded_files:
         return []
@@ -86,7 +86,7 @@ def process_new_uploads(client: APIClient, uploaded_files: list[Any]) -> list[st
     new_files = []
     for file in uploaded_files:
         key = normalize_file_key(file.name)
-        if key in st.session_state.processed_files:
+        if not force and key in st.session_state.processed_files:
             continue
         new_files.append(file)
 
@@ -99,6 +99,46 @@ def process_new_uploads(client: APIClient, uploaded_files: list[Any]) -> list[st
 
     st.session_state.uploaded_docs = response.get("uploaded_documents", [])
     return response.get("accepted_files", [])
+
+
+def resync_uploader_selection(client: APIClient, uploader_state_key: str) -> None:
+    """Reconcile the current uploader selection with backend state after reruns.
+
+    This is idempotent and helps recover when the backend session is lost or
+    the app reruns without firing the file-uploader on_change callback.
+    """
+    uploaded_files = st.session_state.get(uploader_state_key) or []
+    if not uploaded_files:
+        return
+
+    current_files_by_key: dict[str, Any] = {}
+    for file in uploaded_files:
+        key = normalize_file_key(file.name)
+        if key and key not in current_files_by_key:
+            current_files_by_key[key] = file
+
+    current_keys = set(current_files_by_key.keys())
+    if not current_keys:
+        return
+
+    backend_has_session = True
+    backend_processed_files: set[str] = set()
+    try:
+        session = client.get_session(st.session_state.session_id)
+        backend_processed_files = set(session.get("processed_files", []))
+    except Exception:
+        backend_has_session = False
+
+    if backend_has_session and backend_processed_files == current_keys and st.session_state.processed_files == current_keys:
+        return
+
+    accepted_names = process_new_uploads(client, list(current_files_by_key.values()), force=not backend_has_session)
+    if accepted_names:
+        st.session_state.upload_feedback = {
+            "accepted": accepted_names,
+            "removed": st.session_state.upload_feedback.get("removed", []),
+            "error": "",
+        }
 
 
 def handle_uploader_change(client: APIClient, uploader_state_key: str) -> None:

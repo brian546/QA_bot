@@ -15,10 +15,13 @@ class SessionData:
     session_id: str
     processed_files: set[str] = field(default_factory=set)
     uploaded_documents: list[dict[str, Any]] = field(default_factory=list)
+    image_assets: list[dict[str, Any]] = field(default_factory=list)
     chunks: list[dict[str, Any]] = field(default_factory=list)
+    image_chunks: list[dict[str, Any]] = field(default_factory=list)
     lexical_tokens: list[list[str]] = field(default_factory=list)
     lexical_index: BM25Okapi | None = None
     semantic_index: FAISS | None = None
+    image_index: Any | None = None
     chat_history: list[dict[str, str]] = field(default_factory=list)
     graph_state: dict[str, Any] = field(default_factory=dict)
     llm_settings: dict[str, Any] = field(default_factory=dict)

@@ -60,9 +60,13 @@ class RuntimeConfigResponse(BaseModel):
     agent_provider_name: str
     embedding_provider_name: str
     embedding_provider: str
+    asset_storage_backend: str
+    asset_storage_path: str
     available_models: list[str]
     default_model: str
     default_embedding_model: str
+    default_image_embedding_model: str
+    default_vision_model: str
     default_llm_settings: dict[str, Any]
     default_retrieval_settings: dict[str, Any]
     default_citations_k: int
