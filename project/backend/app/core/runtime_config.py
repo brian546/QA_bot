@@ -12,7 +12,6 @@ def build_runtime_config(settings: Settings) -> dict[str, Any]:
     """
     return {
         "agent_provider_name": settings.provider_name(),
-        "provider_name": settings.provider_name(),
         "embedding_provider_name": settings.embedding_provider_name(),
         "embedding_provider": settings.embedding_provider,
         "available_models": settings.allowed_models(),

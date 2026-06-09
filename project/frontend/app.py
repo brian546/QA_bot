@@ -169,7 +169,7 @@ def main() -> None:
             st.markdown(question)
 
         with st.chat_message("assistant"):
-            with st.spinner("Retrieving evidence and generating grounded answer..."):
+            with st.spinner("Thinking..."):
                 try:
                     response = client.ask(
                         session_id=st.session_state.session_id,

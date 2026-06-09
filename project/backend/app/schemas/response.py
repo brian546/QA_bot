@@ -58,7 +58,6 @@ class SessionDetailResponse(BaseModel):
 
 class RuntimeConfigResponse(BaseModel):
     agent_provider_name: str
-    provider_name: str
     embedding_provider_name: str
     embedding_provider: str
     available_models: list[str]

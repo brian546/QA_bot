@@ -33,7 +33,7 @@ def test_runtime_config_endpoint_supports_ollama_provider(monkeypatch) -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["provider_name"] == "Ollama"
+    assert payload["agent_provider_name"] == "Ollama"
     assert payload["default_model"] == "gemma4:26b"
     assert payload["default_llm_settings"]["model"] == "gemma4:26b"
     assert payload["available_models"] == ["gemma4:26b"]
@@ -57,7 +57,6 @@ def test_runtime_config_endpoint_supports_split_providers(monkeypatch) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["agent_provider_name"] == "Ollama"
-    assert payload["provider_name"] == "Ollama"
     assert payload["embedding_provider_name"] == "OpenRouter"
     assert payload["embedding_provider"] == "openrouter"
     assert payload["default_model"] == "gemma4:26b"

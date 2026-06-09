@@ -70,7 +70,7 @@ def render_llm_controls(runtime_config: dict[str, Any], current: dict[str, Any])
     """Render dynamic model controls from backend-provided runtime config."""
     constraints = runtime_config.get("parameter_constraints", {})
     available_models = runtime_config.get("available_models", [])
-    provider_name = str(runtime_config.get("provider_name", "LLM"))
+    agent_provider_name = str(runtime_config.get("agent_provider_name", "LLM"))
 
     model_key = "llm_model_control"
     temperature_key = "llm_temperature_control"
@@ -126,7 +126,7 @@ def render_llm_controls(runtime_config: dict[str, Any], current: dict[str, Any])
             "Model",
             options=available_models,
             key=model_key,
-            help=f"Choose from backend-approved {provider_name} models for this session.",
+            help=f"Choose from backend-approved {agent_provider_name} models for this session.",
         )
 
         t_c = constraints.get("temperature", {"min": 0.0, "max": 1.0, "step": 0.05})
