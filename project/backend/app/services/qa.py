@@ -7,6 +7,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from project.backend.app.core.config import Settings
 from project.backend.app.core.llm import get_chat_model
 
+import logging
 
 REWRITE_SYSTEM = (
     "Rewrite the user question into a standalone retrieval query. "
@@ -95,7 +96,7 @@ def rewrite_query_with_history(
     chat_history: list[dict[str, str]],
     llm_settings: dict[str, Any],
 ) -> str:
-    """Rewrite query into standalone form using OpenRouter when available."""
+    """Rewrite the user question into a standalone query that can be answered without chat history, if needed for retrieval."""
     history_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history)
     prompt = f"Chat history:\n{history_text}\n\nQuestion:\n{question}\n\nStandalone query:"
     try:
@@ -103,8 +104,9 @@ def rewrite_query_with_history(
         response = model.invoke([SystemMessage(content=REWRITE_SYSTEM), HumanMessage(content=prompt)])
         rewritten = str(response.content).strip()
         return rewritten or question
-    except Exception:
-        return question
+    except Exception as e:
+        logging.error(f"Error in rewrite_query_with_history: {e}")
+    return question
 
 
 def should_search_documents(
@@ -137,8 +139,8 @@ def should_search_documents(
             return True
         if "DIRECT" in decision:
             return False
-    except Exception:
-        pass
+    except Exception as e:
+        logging.error(f"Error in should_search_documents: {e}")
 
     # Conservative heuristic fallback if router model is unavailable.
     lowered = question.lower()
@@ -159,14 +161,15 @@ def answer_directly(
         f"Question:\n{question}\n\n"
         "Provide a concise direct answer."
     )
+
     try:
         model = get_chat_model(settings, llm_settings)
         response = model.invoke([SystemMessage(content=DIRECT_SYSTEM), HumanMessage(content=prompt)])
         answer = str(response.content).strip()
         if answer:
             return answer
-    except Exception:
-        pass
+    except Exception as e:
+        logging.error(f"Error in answer_directly: {e}")
 
     return "Chat model is unavailable. Try again later."
 
@@ -240,7 +243,8 @@ def answer_with_evidence(
         else:
             response = model.invoke([SystemMessage(content=ANSWER_SYSTEM), HumanMessage(content=prompt)])
         answer = str(response.content).strip()
-    except Exception:
+    except Exception as e:
+        logging.error(f"Error in answer_with_evidence: {e}")
         answer = "Based on the retrieved evidence, here is the most likely answer:\n" + compressed_context[:1200]
 
     return answer, citations
@@ -288,8 +292,8 @@ def is_answer_confident(
             return False
         if "CONFIDENT" in verdict:
             return True
-    except Exception:
-        pass
+    except Exception as e:
+        logging.error(f"Error in is_answer_confident: {e}")
 
     lowered = answer.lower()
     refusal_markers = (
