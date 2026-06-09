@@ -240,7 +240,6 @@ def answer_with_evidence(
         else:
             response = model.invoke([SystemMessage(content=ANSWER_SYSTEM), HumanMessage(content=prompt)])
         answer = str(response.content).strip()
-        print(answer)
     except Exception:
         answer = "Based on the retrieved evidence, here is the most likely answer:\n" + compressed_context[:1200]
 
@@ -293,7 +292,6 @@ def is_answer_confident(
         pass
 
     lowered = answer.lower()
-    print(lowered)
     refusal_markers = (
         "insufficient",
         "not enough evidence",
