@@ -3,11 +3,14 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from typing import Any
+import numpy as np
 
 import httpx
 
 from project.backend.app.core.config import Settings
 
+import logging
+logger = logging.getLogger(__name__)
 
 def _normalize_vector(vector: list[float]) -> list[float]:
     magnitude = math.sqrt(sum(value * value for value in vector))
@@ -17,15 +20,18 @@ def _normalize_vector(vector: list[float]) -> list[float]:
 
 
 def _cosine_similarity(left: list[float], right: list[float]) -> float:
+    """Compute cosine similarity between two vectors."""
     if not left or not right:
+        logger.warning("One or both vectors are empty, returning similarity of 0.0")
         return 0.0
-    size = min(len(left), len(right))
-    numerator = sum(left[idx] * right[idx] for idx in range(size))
-    left_mag = math.sqrt(sum(value * value for value in left[:size]))
-    right_mag = math.sqrt(sum(value * value for value in right[:size]))
-    if left_mag <= 0 or right_mag <= 0:
+    if len(left) != len(right):
+        logger.warning("Vectors must be of the same size for cosine similarity, returning similarity of 0.0")    
         return 0.0
-    return numerator / (left_mag * right_mag)
+    
+    left_array = np.asarray(left)
+    right_array = np.asarray(right)
+    similarity = np.dot(left_array, right_array) / (np.linalg.norm(left_array) * np.linalg.norm(right_array))
+    return float(similarity)
 
 
 class LocalMultimodalEmbeddings:
