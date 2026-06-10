@@ -8,6 +8,9 @@ from typing import Any
 
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 def is_image_filename(filename: str) -> bool:
     return os.path.splitext(filename.lower())[1] in SUPPORTED_IMAGE_EXTENSIONS
@@ -142,7 +145,8 @@ def build_image_asset_record(
 def extract_pdf_page_images(pdf_bytes: bytes, filename: str) -> list[dict[str, Any]]:
     try:
         import fitz  # type: ignore
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error importing fitz: {e}")
         return []
 
     document = fitz.open(stream=pdf_bytes, filetype="pdf")
