@@ -73,6 +73,48 @@ uv run streamlit run project/frontend/app.py --server.port 8511
 uv run pytest project/tests -q
 ```
 
+## Docker Setup
+
+This repo includes container setup for:
+
+- FastAPI backend on `:8000`
+- Streamlit frontend on `:8511`
+
+Ollama is intentionally not containerized. The backend container can call Ollama running on your host machine.
+
+1. Create env file if needed.
+
+```bash
+cp .env.example .env
+```
+
+2. If using Ollama from outside Docker, update `.env`:
+
+```env
+LLM_PROVIDER=ollama
+EMBEDDING_PROVIDER=ollama
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+```
+
+`host.docker.internal` is mapped in `docker-compose.yml` for Linux via `host-gateway`.
+
+3. Build and run containers.
+
+```bash
+docker compose up --build
+```
+
+4. Open apps:
+
+- Frontend: http://localhost:8511
+- Backend health: http://localhost:8000/health
+
+5. Stop containers:
+
+```bash
+docker compose down
+```
+
 ## LangGraph Flow
 
 Core nodes:

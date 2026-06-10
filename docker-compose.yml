@@ -1,0 +1,36 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pdfrag-backend
+    env_file:
+      - .env
+    environment:
+      ASSET_STORAGE_BACKEND: filesystem
+      ASSET_STORAGE_PATH: /data/assets
+      OLLAMA_BASE_URL: ${COMPOSE_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+    volumes:
+      - pdfrag_data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pdfrag-frontend
+    depends_on:
+      - backend
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports:
+      - "8511:8511"
+    command: streamlit run project/frontend/app.py --server.address 0.0.0.0 --server.port 8511
+    restart: unless-stopped
+
+volumes:
+  pdfrag_data:
