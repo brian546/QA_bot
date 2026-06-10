@@ -9,7 +9,7 @@ services:
     environment:
       ASSET_STORAGE_BACKEND: filesystem
       ASSET_STORAGE_PATH: /data/assets
-      OLLAMA_BASE_URL: ${COMPOSE_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      OLLAMA_BASE_URL: ${COMPOSE_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     volumes:
       - pdfrag_data:/data
     extra_hosts:
