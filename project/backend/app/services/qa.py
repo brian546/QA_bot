@@ -57,6 +57,7 @@ CONFIDENCE_EVAL_SYSTEM = (
     "Choose NOT_CONFIDENT when evidence is weak, missing, contradictory, or the answer is speculative."
 )
 
+logger = logging.getLogger(__name__)
 
 def _build_image_human_content(
     prompt: str,
@@ -105,7 +106,7 @@ def rewrite_query_with_history(
         rewritten = str(response.content).strip()
         return rewritten or question
     except Exception as e:
-        logging.error(f"Error in rewrite_query_with_history: {e}")
+        logger.error(f"Error in rewrite_query_with_history: {e}")
     return question
 
 
@@ -140,7 +141,7 @@ def should_search_documents(
         if "DIRECT" in decision:
             return False
     except Exception as e:
-        logging.error(f"Error in should_search_documents: {e}")
+        logger.error(f"Error in should_search_documents: {e}")
 
     # Conservative heuristic fallback if router model is unavailable.
     lowered = question.lower()
@@ -169,7 +170,7 @@ def answer_directly(
         if answer:
             return answer
     except Exception as e:
-        logging.error(f"Error in answer_directly: {e}")
+        logger.error(f"Error in answer_directly: {e}")
 
     return "Chat model is unavailable. Try again later."
 
@@ -244,7 +245,7 @@ def answer_with_evidence(
             response = model.invoke([SystemMessage(content=ANSWER_SYSTEM), HumanMessage(content=prompt)])
         answer = str(response.content).strip()
     except Exception as e:
-        logging.error(f"Error in answer_with_evidence: {e}")
+        logger.error(f"Error in answer_with_evidence: {e}")
         answer = "Based on the retrieved evidence, here is the most likely answer:\n" + compressed_context[:1200]
 
     return answer, citations
@@ -293,7 +294,7 @@ def is_answer_confident(
         if "CONFIDENT" in verdict:
             return True
     except Exception as e:
-        logging.error(f"Error in is_answer_confident: {e}")
+        logger.error(f"Error in is_answer_confident: {e}")
 
     lowered = answer.lower()
     refusal_markers = (
