@@ -21,4 +21,5 @@ faiss-cpu==1.8.0; sys_platform == 'darwin'
 faiss-cpu>=1.8; sys_platform != 'darwin'
 rank-bm25>=0.2
 reportlab>=4.2
+pymupdf>=1.23
 pytest>=8.0
