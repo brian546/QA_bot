@@ -53,6 +53,16 @@ def reset_retrieval_settings_locally() -> None:
 def main() -> None:
     st.set_page_config(page_title="Hybrid Document QA", layout="wide")
     st.title("Hybrid Multi-Document QA")
+    st.markdown(
+        """
+        <style>
+        .main .block-container {
+            padding-bottom: 14rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # backend_url = st.sidebar.text_input("Backend URL", value=DEFAULT_BACKEND_URL)
     client = APIClient(DEFAULT_BACKEND_URL)
@@ -138,23 +148,12 @@ def main() -> None:
 
     uploader_state_key = f"uploader_files_{st.session_state.uploader_key}"
     uploader_label = "Upload documents and images (PDF, TXT, MD, CSV, DOCX, PPTX, XLSX, PNG, JPG, GIF, WEBP)"
-    if st.session_state.uploaded_docs:
-        loaded_names = ", ".join(
-            f"{str(doc.get('filename', 'unknown'))} [{str(doc.get('modality', 'text'))}]"
-            for doc in st.session_state.uploaded_docs
-        )
-        uploader_label = f"{uploader_label}\n\nLoaded in this session: {loaded_names}"
-
-    st.file_uploader(
-        uploader_label,
-        type=["pdf", "txt", "md", "markdown", "csv", "docx", "pptx", "xlsx", "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff"],
-        accept_multiple_files=True,
-        key=uploader_state_key,
-        on_change=handle_uploader_change,
-        args=(client, uploader_state_key),
-    )
-
-    resync_uploader_selection(client, uploader_state_key)
+    # if st.session_state.uploaded_docs:
+    #     loaded_names = ", ".join(
+    #         f"{str(doc.get('filename', 'unknown'))} [{str(doc.get('modality', 'text'))}]"
+    #         for doc in st.session_state.uploaded_docs
+    #     )
+    #     uploader_label = f"{uploader_label}\n\nLoaded in this session: {loaded_names}"
 
     feedback = st.session_state.upload_feedback
     if feedback.get("accepted"):
@@ -177,7 +176,19 @@ def main() -> None:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    question = st.chat_input("Ask a question")
+    st.bottom.file_uploader(
+        uploader_label,
+        type=["pdf", "txt", "md", "markdown", "csv", "docx", "pptx", "xlsx", "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff"],
+        accept_multiple_files=True,
+        key=uploader_state_key,
+        on_change=handle_uploader_change,
+        args=(client, uploader_state_key),
+        label_visibility="collapsed",
+    )
+    question = st.bottom.chat_input("Ask a question")
+
+    resync_uploader_selection(client, uploader_state_key)
+
     if question:
         st.session_state.messages.append({"role": "user", "content": question})
         with st.chat_message("user"):
@@ -206,13 +217,25 @@ def main() -> None:
             if citations:
                 with st.expander("Citations", expanded=False):
                     for citation in citations:
-                        filename = str(citation.get("filename", "unknown"))
-                        page = citation.get("page")
                         modality = str(citation.get("modality", "text"))
-                        st.markdown(f"- **{filename}** p.{page} [{modality}] {citation.get('chunk_id', '')}")
+                        if modality == "web":
+                            source = str(citation.get("source", "web"))
+                            title = str(citation.get("title", "")).strip() or source
+                            url = str(citation.get("url", "")).strip()
+                            published = str(citation.get("published_date", "")).strip()
+                            date_suffix = f" ({published})" if published else ""
+                            if url:
+                                st.markdown(f"- [{title}]({url}) - {source}{date_suffix} [web]")
+                            else:
+                                st.markdown(f"- **{title}** - {source}{date_suffix} [web]")
+                        else:
+                            filename = str(citation.get("filename", "unknown"))
+                            page = citation.get("page")
+                            st.markdown(f"- **{filename}** p.{page} [{modality}] {citation.get('chunk_id', '')}")
                         image_data_url = str(citation.get("image_data_url", ""))
                         if image_data_url.startswith("data:image/"):
-                            st.image(image_data_url, caption=filename, use_container_width=True)
+                            image_caption = str(citation.get("filename", citation.get("title", "image")))
+                            st.image(image_data_url, caption=image_caption, use_container_width=True)
 
             if citations:
                 with st.expander("Retrieval diagnostics", expanded=False):

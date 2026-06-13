@@ -4,7 +4,7 @@ from langgraph.graph import END, START, StateGraph
 
 from project.backend.app.core.config import Settings
 from project.backend.app.core.session_store import InMemorySessionStore
-from project.backend.app.graph.edges import route_after_evaluate, route_after_query_router
+from project.backend.app.graph.edges import route_after_evaluate, route_after_query_router, route_after_web_decision
 from project.backend.app.graph.nodes import GraphNodes
 from project.backend.app.graph.state import GraphState
 
@@ -17,6 +17,8 @@ def build_graph(settings: Settings, session_store: InMemorySessionStore):
     graph.add_node("ingest_upload", nodes.ingest_upload)
     graph.add_node("query_router", nodes.query_router)
     graph.add_node("rewrite_query", nodes.rewrite_query)
+    graph.add_node("decide_web_search", nodes.decide_web_search)
+    graph.add_node("web_search", nodes.web_search)
     graph.add_node("lexical_retrieve", nodes.lexical_retrieve)
     graph.add_node("semantic_retrieve", nodes.semantic_retrieve)
     graph.add_node("fuse_results", nodes.fuse_results)
@@ -33,9 +35,20 @@ def build_graph(settings: Settings, session_store: InMemorySessionStore):
         route_after_query_router,
         {
             "rewrite_query": "rewrite_query",
+            "decide_web_search": "decide_web_search",
+        },
+    )
+
+    graph.add_conditional_edges(
+        "decide_web_search",
+        route_after_web_decision,
+        {
+            "web_search": "web_search",
             "answer_question": "answer_question",
         },
     )
+
+    graph.add_edge("web_search", "answer_question")
 
     graph.add_edge("rewrite_query", "lexical_retrieve")
     graph.add_edge("lexical_retrieve", "semantic_retrieve")
@@ -48,6 +61,7 @@ def build_graph(settings: Settings, session_store: InMemorySessionStore):
         "evaluate_answer",
         route_after_evaluate,
         {
+            "web_search": "web_search",
             "fallback": "fallback",
             "finish": END,
         },

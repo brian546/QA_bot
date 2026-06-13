@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     openrouter_timeout: int = Field(default=45, alias="OPENROUTER_TIMEOUT")
     openrouter_max_retries: int = Field(default=1, alias="OPENROUTER_MAX_RETRIES")
 
+    tavily_api_key: str = Field(default="", alias="TAVILY_API_KEY")
+    web_search_enabled: bool = Field(default=True, alias="WEB_SEARCH_ENABLED")
+    web_search_max_results: int = Field(default=5, alias="WEB_SEARCH_MAX_RESULTS")
+
     ollama_model: str = Field(default="gemma4:26b", alias="OLLAMA_MODEL")
     ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
     ollama_embedding_model: str = Field(default="", alias="OLLAMA_EMBEDDING_MODEL")
@@ -94,6 +98,8 @@ class Settings(BaseSettings):
 
         if self.citations_max_k < 1:
             raise ValueError("CITATIONS_MAX_K must be at least 1")
+        if self.web_search_max_results < 1:
+            raise ValueError("WEB_SEARCH_MAX_RESULTS must be at least 1")
         if self.llm_provider == "openrouter" and not self.openrouter_model:
             raise ValueError("OPENROUTER_MODEL must not be empty when LLM_PROVIDER=openrouter")
         if self.llm_provider == "ollama" and not self.ollama_model:

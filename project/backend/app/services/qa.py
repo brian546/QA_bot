@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlparse
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -55,6 +57,38 @@ CONFIDENCE_EVAL_SYSTEM = (
     "Return exactly one token: CONFIDENT or NOT_CONFIDENT. "
     "Choose CONFIDENT only when the answer is clearly supported by the provided evidence and citations. "
     "Choose NOT_CONFIDENT when evidence is weak, missing, contradictory, or the answer is speculative."
+)
+
+WEB_ROUTER_SYSTEM = (
+    "You are a web-search routing classifier. Decide if a question needs current web information. "
+    "Return exactly one token: WEB_SEARCH or NO_WEB_SEARCH. "
+    "Choose WEB_SEARCH for time-sensitive, current-events, up-to-date facts, recent prices, "
+    "live status, or when specific evidence is likely not present in local context. "
+    "Choose NO_WEB_SEARCH for timeless facts, opinions, or questions answerable without current web data."
+)
+
+WEB_ANSWER_SYSTEM = (
+    "You are a helpful assistant using web snippets as evidence. "
+    "Answer with concise factual statements and cite web sources inline as [source N]. "
+    "If sources are weak or missing, say uncertainty clearly."
+)
+
+TIME_SENSITIVE_KEYWORDS = (
+    "today",
+    "now",
+    "current",
+    "latest",
+    "recent",
+    "this week",
+    "this month",
+    "this year",
+    "as of",
+    "news",
+    "price",
+    "weather",
+    "stock",
+    "exchange rate",
+    "breaking",
 )
 
 logger = logging.getLogger(__name__)
@@ -149,6 +183,50 @@ def should_search_documents(
     return any(token in lowered for token in keywords)
 
 
+def should_search_web(
+    settings: Settings,
+    question: str,
+    chat_history: list[dict[str, str]],
+    llm_settings: dict[str, Any],
+    allow_model_inference: bool = False,
+) -> bool:
+    """Decide whether the question should trigger a live web search."""
+    if not settings.web_search_enabled:
+        return False
+
+    lowered = question.lower()
+    if any(token in lowered for token in TIME_SENSITIVE_KEYWORDS):
+        return True
+
+    if not allow_model_inference:
+        return False
+
+    history_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history)
+    today = datetime.now(UTC).date().isoformat()
+    prompt = (
+        f"Today's date: {today}\n"
+        f"Recent history:\n{history_text}\n\n"
+        f"Question:\n{question}\n\n"
+        "Return WEB_SEARCH or NO_WEB_SEARCH."
+    )
+
+    router_settings = dict(llm_settings or {})
+    router_settings["temperature"] = 0
+
+    try:
+        model = get_chat_model(settings, router_settings)
+        response = model.invoke([SystemMessage(content=WEB_ROUTER_SYSTEM), HumanMessage(content=prompt)])
+        decision = str(response.content).strip().upper()
+        if "WEB_SEARCH" in decision and "NO_WEB_SEARCH" not in decision:
+            return True
+        if "NO_WEB_SEARCH" in decision:
+            return False
+    except Exception as e:
+        logger.error(f"Error in should_search_web: {e}")
+
+    return False
+
+
 def answer_directly(
     settings: Settings,
     question: str,
@@ -173,6 +251,64 @@ def answer_directly(
         logger.error(f"Error in answer_directly: {e}")
 
     return "Chat model is unavailable. Try again later."
+
+
+def answer_with_web_results(
+    settings: Settings,
+    question: str,
+    chat_history: list[dict[str, str]],
+    web_results: list[dict[str, Any]],
+    llm_settings: dict[str, Any],
+) -> tuple[str, list[dict[str, Any]]]:
+    """Generate an answer grounded in Tavily web results."""
+    if not settings.tavily_api_key.strip() or not settings.web_search_enabled:
+        return (
+            "I do not have web search enabled right now. Please configure Tavily to answer this with live web data.",
+            [],
+        )
+
+    if not web_results:
+        return ("I could not find relevant web results for this question.", [])
+
+    history_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history[-6:])
+    sources_block = "\n\n".join(
+        (
+            f"[source {idx}] title: {row.get('title', '')}\n"
+            f"url: {row.get('url', '')}\n"
+            f"snippet: {row.get('content', '')}"
+        )
+        for idx, row in enumerate(web_results, start=1)
+    )
+    prompt = (
+        f"Recent history:\n{history_text}\n\n"
+        f"Question:\n{question}\n\n"
+        f"Web sources:\n{sources_block}\n\n"
+        "Answer using the sources and include inline citations like [source 1]."
+    )
+
+    try:
+        model = get_chat_model(settings, llm_settings)
+        response = model.invoke([SystemMessage(content=WEB_ANSWER_SYSTEM), HumanMessage(content=prompt)])
+        answer = str(response.content).strip()
+    except Exception as e:
+        logger.error(f"Error in answer_with_web_results: {e}")
+        answer = "I found web results but could not generate a final response from them."
+
+    citations: list[dict[str, Any]] = []
+    for row in web_results:
+        url = str(row.get("url", "")).strip()
+        host = urlparse(url).netloc or "web"
+        citations.append(
+            {
+                "modality": "web",
+                "source": host,
+                "title": row.get("title", ""),
+                "url": url,
+                "published_date": row.get("published_date"),
+            }
+        )
+
+    return answer, citations
 
 
 def compress_evidence(

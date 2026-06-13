@@ -28,6 +28,7 @@ dependencies = [
     "langchain-openrouter>=0.1",
     "langchain-community>=0.2",
     "langchain-text-splitters>=0.2",
+    "tavily-python>=0.5",
     # macOS: keep legacy pin for older Python versions to match available wheels,
     # but allow newer Python (>=3.14) on mac to install a newer faiss-cpu that
     # provides wheels for the newer Python ABI. Do not change non-mac cases.

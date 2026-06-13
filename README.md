@@ -8,6 +8,7 @@ Grounded multi-document question answering app built with FastAPI, Streamlit, La
 - Keep uploads session-scoped, with duplicate skipping by normalized file key.
 - Sync uploader deselection to backend removal (`/upload/remove`).
 - Answer questions with hybrid retrieval (BM25 + semantic vectors) and citations.
+- Use Tavily web search when the agent detects time-sensitive or low-evidence questions.
 - Support follow-up questions using session chat history.
 - Expose session-scoped LLM and retrieval controls from backend runtime config.
 - Manage stored sessions from the UI: list, switch, delete, and start new session.
@@ -44,6 +45,7 @@ Required values in `.env` depend on selected providers:
 - Agent model provider uses `LLM_PROVIDER`.
 - Embedding provider uses `EMBEDDING_PROVIDER` (defaults to `LLM_PROVIDER` when omitted).
 - OpenRouter usage requires `OPENROUTER_API_KEY`.
+- Web search usage requires `TAVILY_API_KEY`.
 
 Examples:
 
@@ -54,6 +56,11 @@ Examples:
 For Ollama, keep Ollama server running locally (`ollama serve`) and pull models first (for example `ollama pull gemma4:26b` and `ollama pull nomic-embed-text`).
 
 Optional runtime tuning values are documented in `.env.example`.
+
+Web search toggles:
+
+- `WEB_SEARCH_ENABLED=true|false`
+- `WEB_SEARCH_MAX_RESULTS=5`
 
 3. Start backend.
 
@@ -121,19 +128,22 @@ Core nodes:
 
 1. `ingest_upload`
 2. `query_router`
-3. `rewrite_query` (search path)
-4. `lexical_retrieve`
-5. `semantic_retrieve`
-6. `fuse_results`
-7. `compress_context`
-8. `answer_question`
-9. `evaluate_answer`
-10. `fallback`
+3. `decide_web_search` (direct path)
+4. `web_search` (Tavily path)
+5. `rewrite_query` (document-search path)
+6. `lexical_retrieve`
+7. `semantic_retrieve`
+8. `fuse_results`
+9. `compress_context`
+10. `answer_question`
+11. `evaluate_answer`
+12. `fallback`
 
 Routing behavior:
 
 - If no documents are available in session, route to `direct` answer path.
 - If document search is needed, run full retrieval pipeline.
+- If query is time-sensitive or document grounding is insufficient, route to Tavily web search.
 - If grounded answer quality is insufficient (missing evidence/citations or too low confidence), route to `fallback`.
 
 ## Runtime Config And Controls

@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from openpyxl import Workbook
 
 from project.backend.app.main import create_app
-from project.backend.app.services.qa import answer_with_evidence, is_answer_confident
+from project.backend.app.services.qa import answer_with_evidence, answer_with_web_results, is_answer_confident
 from project.backend.app.services.lexical_retrieval import build_bm25_index
 from project.backend.app.services.semantic_retrieval import build_faiss_index
 from project.backend.app.core.config import Settings
@@ -359,3 +359,42 @@ def test_ask_falls_back_to_uploaded_image_when_retrieval_is_empty(monkeypatch) -
             break
 
     assert image_payload_found
+
+
+def test_answer_with_web_results_returns_simplified_web_citations(monkeypatch) -> None:
+    app = create_app()
+    settings = app.state.settings
+
+    class FakeModel:
+        def invoke(self, messages):
+            class _Response:
+                content = "Latest update from sources [source 1]."
+
+            return _Response()
+
+    monkeypatch.setattr("project.backend.app.services.qa.get_chat_model", lambda *args, **kwargs: FakeModel())
+
+    answer, citations = answer_with_web_results(
+        settings,
+        "What are the latest updates today?",
+        [],
+        [
+            {
+                "title": "Example Headline",
+                "url": "https://example.com/news",
+                "content": "Snippet",
+                "published_date": "2026-06-12",
+            }
+        ],
+        settings.default_llm_settings(),
+    )
+
+    assert answer
+    assert citations
+    citation = citations[0]
+    assert citation["modality"] == "web"
+    assert citation["title"] == "Example Headline"
+    assert citation["url"] == "https://example.com/news"
+    assert citation["source"] == "example.com"
+    assert "page" not in citation
+    assert "chunk_id" not in citation

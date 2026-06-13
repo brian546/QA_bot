@@ -21,10 +21,13 @@ class GraphState(TypedDict, total=False):
     citations: list[dict[str, Any]]
     answer_is_confident: bool
     retrieval_diagnostics: dict[str, Any]
+    web_search_results: list[dict[str, Any]]
     llm_settings: dict[str, Any]
     retrieval_settings: dict[str, Any]
     citations_k: int
     needs_document_search: bool
+    needs_web_search: bool
     route_decision: str
     error: str
     should_fallback: bool
+    should_web_search: bool
