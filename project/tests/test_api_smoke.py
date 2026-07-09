@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from openpyxl import Workbook
 
 from project.backend.app.main import create_app
-from project.backend.app.services.qa import answer_with_evidence, answer_with_web_results, is_answer_confident
+from project.backend.app.services.qa import answer_directly, answer_with_evidence, answer_with_web_results, is_answer_confident
 from project.backend.app.services.lexical_retrieval import build_bm25_index
 from project.backend.app.services.semantic_retrieval import build_faiss_index
 from project.backend.app.core.config import Settings
@@ -306,6 +306,50 @@ def test_is_answer_confident_uses_raw_image_payload(monkeypatch) -> None:
     content = getattr(human_message, "content", None)
     assert isinstance(content, list)
     assert any(isinstance(item, dict) and item.get("type") == "image_url" for item in content)
+
+
+def test_answer_directly_openrouter_rate_limit_message(monkeypatch) -> None:
+    app = create_app()
+    settings = app.state.settings
+
+    class TooManyRequestsResponseError(Exception):
+        pass
+
+    def _raise(*args, **kwargs):
+        raise TooManyRequestsResponseError("Provider returned error")
+
+    monkeypatch.setattr("project.backend.app.services.qa.get_chat_model", _raise)
+
+    answer = answer_directly(
+        settings=settings,
+        question="Hi",
+        chat_history=[],
+        llm_settings=settings.default_llm_settings(),
+    )
+
+    assert "OpenRouter is rate-limited" in answer
+
+
+def test_answer_directly_ollama_fallback_message(monkeypatch) -> None:
+    settings = Settings(
+        LLM_PROVIDER="ollama",
+        OLLAMA_MODEL="gemma4:26b",
+        OLLAMA_ALLOWED_MODELS="gemma4:26b",
+    )
+
+    def _raise(*args, **kwargs):
+        raise RuntimeError("backend unavailable")
+
+    monkeypatch.setattr("project.backend.app.services.qa.get_chat_model", _raise)
+
+    answer = answer_directly(
+        settings=settings,
+        question="Hi",
+        chat_history=[],
+        llm_settings=settings.default_llm_settings(),
+    )
+
+    assert answer == "Chat model is unavailable. Try again later."
 
 
 def test_ask_falls_back_to_uploaded_image_when_retrieval_is_empty(monkeypatch) -> None:

@@ -1,6 +1,6 @@
-# Hybrid Multi-Document QA MVP
+# Hybrid Multimodal QA MVP
 
-Grounded multi-document question answering app built with FastAPI, Streamlit, LangGraph, and LangChain. Supports OpenRouter and Ollama providers.
+Grounded multimodal question answering app built with FastAPI, Streamlit, LangGraph, and LangChain. Supports OpenRouter and Ollama providers.
 
 ## What It Does
 
@@ -13,12 +13,117 @@ Grounded multi-document question answering app built with FastAPI, Streamlit, La
 - Expose session-scoped LLM and retrieval controls from backend runtime config.
 - Manage stored sessions from the UI: list, switch, delete, and start new session.
 
-## Architecture At A Glance
+## Project Structure Explained
 
-- Backend: FastAPI app with routers for config, upload, chat, and session management.
-- Frontend: Streamlit app with runtime-driven controls and uploader sync callbacks.
-- Orchestration: LangGraph state machine for direct answer vs retrieval workflow.
-- Retrieval: BM25 lexical index + FAISS semantic index with weighted reciprocal rank fusion.
+This section explains what each module does and how modules connect.
+
+### 1) Backend (`project/backend/app`)
+
+- `main.py`: FastAPI entrypoint. Creates app state (`settings`, `session_store`, `media_store`, `graph`) and mounts routers.
+
+#### `core/` (shared runtime foundation)
+
+- `config.py`: Central app settings from environment (`.env`) using Pydantic.
+- `llm.py`: LLM provider integration and validation for runtime overrides (`model`, `temperature`, `top_p`).
+- `runtime_config.py`: Builds safe config payload used by frontend (`GET /config`), excluding secrets.
+- `session_store.py`: Thread-safe in-memory session persistence (chat history, uploaded docs, retrieval indices, graph state).
+
+#### `routers/` (HTTP API surface)
+
+- `config.py`: `GET /config` for frontend-safe runtime controls.
+- `upload.py`: `POST /upload` and `POST /upload/remove`; parse files, chunk text, build/rebuild indices, update session docs.
+- `chat.py`: `POST /ask`; validates settings, invokes LangGraph, returns answer + citations + diagnostics.
+- `session.py`: Session lifecycle routes (`GET /sessions`, `GET /sessions/{id}`, `POST /clear-session`).
+
+#### `graph/` (orchestration engine)
+
+- `state.py`: Typed graph state contract shared across all nodes.
+- `builder.py`: Declares nodes + edges and compiles workflow.
+- `nodes.py`: Node implementations for routing, retrieval, fusion, answer generation, and confidence checks.
+- `edges.py`: Conditional routing helpers between nodes.
+
+#### `services/` (domain logic)
+
+- `parser.py`: Multi-format parser (PDF/TXT/MD/CSV/DOCX/PPTX/XLSX + image support).
+- `chunking.py`: Splits parsed pages into chunked passages with overlap.
+- `dedupe.py`: Normalized file-key deduplication.
+- `lexical_retrieval.py`: BM25 index build + lexical retrieval.
+- `semantic_retrieval.py`: Embedding + FAISS vector retrieval.
+- `image_assets.py`: Extracts/stores PDF page images and metadata.
+- `image_retrieval.py`: Image embedding/indexing + image asset retrieval.
+- `hybrid_retrieval.py`: Weighted reciprocal rank fusion and retrieval diagnostics.
+- `qa.py`: Query rewrite, routing heuristics, context compression, grounded answering, confidence evaluation.
+- `web_search.py`: Tavily integration for web search augmentation.
+- `media_store.py`: Storage abstraction for media artifacts (in-memory/filesystem).
+
+#### `schemas/` (API contracts)
+
+- `request.py`: Request models (`AskRequest`, `RemoveFilesRequest`, etc.).
+- `response.py`: Response models (`AskResponse`, upload/session/config responses).
+
+### 2) Frontend (`project/frontend`)
+
+- `app.py`: Streamlit UI entrypoint; uploader sync, chat UI, session controls, answer rendering.
+- `api_client.py`: Backend HTTP client wrapper (`/upload`, `/ask`, `/sessions`, `/config`, etc.).
+- `utils.py`: Streamlit state helpers and runtime config initialization.
+- `components/llm_controls.py`: LLM control widgets.
+- `components/retrieval_controls.py`: Retrieval weight / citation control widgets.
+
+### 3) Tests (`project/tests`)
+
+- `conftest.py`: Shared fixtures and test setup.
+- `test_api_smoke.py`: API availability and basic route behavior.
+- `test_citation_limits.py`: Citation cap behavior.
+- `test_clear_session.py`: Session reset behavior.
+- `test_duplicate_detection.py`: Upload dedupe logic.
+- `test_graph_flow.py`: Orchestration path correctness.
+- `test_hybrid_retrieval.py`: Fusion/retrieval logic.
+- `test_lexical_retrieval.py`: BM25 retrieval behavior.
+- `test_llm_settings_validation.py`: Runtime LLM setting validation.
+- `test_parser.py`: Parsing across supported formats.
+- `test_runtime_config_endpoint.py`: Runtime config payload behavior.
+
+## End-to-End Workflow
+
+```mermaid
+flowchart TD
+	A[User uploads files in Streamlit] --> B[POST /upload]
+	B --> C[Parse + Chunk + Dedupe]
+	C --> D[Build BM25 + FAISS + Image indices]
+	D --> E[Session store updated]
+
+	F[User asks question] --> G[POST /ask]
+	G --> H[Validate llm/retrieval settings]
+	H --> I[LangGraph invoke]
+
+	I --> J[query_router]
+	J -->|needs documents| K[rewrite_query]
+	K --> L[lexical_retrieve]
+	L --> M[semantic_retrieve]
+	M --> N[fuse_results]
+	N --> O[compress_context]
+	O --> P[answer_question]
+
+	J -->|direct/web decision| Q[decide_web_search]
+	Q -->|yes| R[web_search]
+	Q -->|no| P
+	R --> P
+
+	P --> S[evaluate_answer]
+	S -->|confident| T[Return answer + citations + diagnostics]
+	S -->|low confidence| R
+	S -->|still weak| U[fallback]
+	U --> T
+```
+
+### Workflow in plain terms
+
+1. Upload path: `upload.py` parses files, creates chunks/assets, updates indices, and stores them per session.
+2. Ask path: `chat.py` merges runtime overrides and invokes compiled graph from `builder.py`.
+3. Routing path: graph decides direct answer vs document retrieval vs web search.
+4. Retrieval path: lexical + semantic (+ image) hits are fused and compressed.
+5. Answer path: `qa.py` generates grounded answer and evaluates confidence.
+6. Response path: API returns answer, citations, diagnostics, and effective settings used.
 
 ## Local Setup
 
@@ -122,30 +227,6 @@ docker compose up --build
 docker compose down
 ```
 
-## LangGraph Flow
-
-Core nodes:
-
-1. `ingest_upload`
-2. `query_router`
-3. `decide_web_search` (direct path)
-4. `web_search` (Tavily path)
-5. `rewrite_query` (document-search path)
-6. `lexical_retrieve`
-7. `semantic_retrieve`
-8. `fuse_results`
-9. `compress_context`
-10. `answer_question`
-11. `evaluate_answer`
-12. `fallback`
-
-Routing behavior:
-
-- If no documents are available in session, route to `direct` answer path.
-- If document search is needed, run full retrieval pipeline.
-- If query is time-sensitive or document grounding is insufficient, route to Tavily web search.
-- If grounded answer quality is insufficient (missing evidence/citations or too low confidence), route to `fallback`.
-
 ## Runtime Config And Controls
 
 - Frontend fetches safe runtime config from `GET /config`.
@@ -173,22 +254,6 @@ Routing behavior:
 - `POST /clear-session` (json: `session_id`)
 - `GET /sessions`
 - `GET /sessions/{session_id}`
-
-## Key Paths
-
-- `project/backend/app/main.py`
-- `project/backend/app/core/config.py`
-- `project/backend/app/core/llm.py`
-- `project/backend/app/core/runtime_config.py`
-- `project/backend/app/core/session_store.py`
-- `project/backend/app/graph/`
-- `project/backend/app/routers/`
-- `project/backend/app/services/`
-- `project/frontend/app.py`
-- `project/frontend/api_client.py`
-- `project/frontend/utils.py`
-- `project/frontend/components/`
-- `project/tests/`
 
 ## Manual Verification Checklist
 

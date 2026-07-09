@@ -59,4 +59,5 @@ def get_chat_model(settings: Settings, llm_settings: dict[str, Any] | None = Non
         top_p=effective["top_p"],
         timeout=settings.openrouter_timeout,
         max_retries=settings.openrouter_max_retries,
+        route="fallback",
     )

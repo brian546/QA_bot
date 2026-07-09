@@ -93,6 +93,30 @@ TIME_SENSITIVE_KEYWORDS = (
 
 logger = logging.getLogger(__name__)
 
+
+def _direct_answer_unavailable_message(settings: Settings, error: Exception) -> str:
+    """Build a user-facing fallback message for direct-answer failures."""
+    generic = "Chat model is unavailable. Try again later."
+    if settings.llm_provider != "openrouter":
+        return generic
+
+    error_text = str(error).strip().lower()
+    error_type = type(error).__name__.lower()
+
+    if "toomanyrequests" in error_type or "rate limit" in error_text or "429" in error_text:
+        return (
+            "OpenRouter is rate-limited right now. "
+            "Try again in a minute, switch to another OpenRouter model, or use Ollama."
+        )
+
+    if "provider returned error" in error_text or "no endpoints found" in error_text:
+        return (
+            "OpenRouter is temporarily unavailable for the selected model. "
+            "Try again later or choose a different OpenRouter model."
+        )
+
+    return generic
+
 def _build_image_human_content(
     prompt: str,
     rows: list[dict[str, Any]],
@@ -248,7 +272,8 @@ def answer_directly(
         if answer:
             return answer
     except Exception as e:
-        logger.error(f"Error in answer_directly: {e}")
+        logger.error("Error in answer_directly: %s", e, exc_info=True)
+        return _direct_answer_unavailable_message(settings, e)
 
     return "Chat model is unavailable. Try again later."
 
