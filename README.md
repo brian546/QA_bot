@@ -1,4 +1,4 @@
-# Hybrid Multimodal QA MVP
+# Multimodal Chatbot
 
 Grounded multimodal question answering app built with FastAPI, Streamlit, LangGraph, and LangChain. Supports OpenRouter and Ollama providers.
 
