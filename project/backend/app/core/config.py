@@ -4,6 +4,7 @@ import json
 from functools import lru_cache
 from typing import Any
 
+import httpx
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
 from pydantic import model_validator
@@ -181,6 +182,34 @@ def require_llm_provider_configuration(settings: Settings) -> None:
     uses_openrouter = settings.llm_provider == "openrouter" or settings.embedding_provider == "openrouter"
     if uses_openrouter and not settings.openrouter_api_key.strip():
         raise RuntimeError("Missing OPENROUTER_API_KEY. Set it in .env before starting the backend.")
+
+    if settings.embedding_provider != "ollama":
+        return
+
+    model = settings.active_embedding_model()
+    base_url = (settings.ollama_base_url.strip() or "http://localhost:11434").rstrip("/")
+    try:
+        with httpx.Client(timeout=float(settings.ollama_timeout)) as client:
+            response = client.get(f"{base_url}/api/tags")
+            response.raise_for_status()
+            models = response.json().get("models", [])
+    except (httpx.HTTPError, ValueError) as exc:
+        raise RuntimeError(
+            f"Could not reach Ollama at {base_url} to verify embedding model '{model}'. "
+            "Start Ollama and check OLLAMA_BASE_URL."
+        ) from exc
+
+    available_models = {
+        str(item.get("name", "")).strip()
+        for item in models
+        if isinstance(item, dict) and str(item.get("name", "")).strip()
+    }
+    model_is_available = model in available_models or (":" not in model and f"{model}:latest" in available_models)
+    if not model_is_available:
+        raise RuntimeError(
+            f"Ollama embedding model '{model}' is not available at {base_url}. "
+            f"Pull it with 'ollama pull {model}'. Available models: {sorted(available_models)}"
+        )
 
 
 @lru_cache(maxsize=1)
