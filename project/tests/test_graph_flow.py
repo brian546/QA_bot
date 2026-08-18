@@ -26,14 +26,25 @@ def test_graph_routes_to_direct_answer_without_docs() -> None:
     assert result.get("final_answer")
 
 
-def test_graph_routes_time_sensitive_question_to_web_search() -> None:
+def test_graph_routes_time_sensitive_question_to_web_search(monkeypatch) -> None:
     settings = Settings(
         OPENROUTER_API_KEY="x",
         OPENROUTER_MODEL="openai/gpt-oss-120b:free",
         OPENROUTER_ALLOWED_MODELS="openai/gpt-oss-120b:free",
+        TAVILY_API_KEY="test-key",
     )
     store = InMemorySessionStore()
     graph = build_graph(settings, store)
+    monkeypatch.setattr(
+        "project.backend.app.graph.nodes.search_web_with_tavily",
+        lambda *_: [
+            {
+                "title": "Example Headline",
+                "url": "https://example.com/news",
+                "content": "Snippet",
+            }
+        ],
+    )
 
     result = graph.invoke(
         {

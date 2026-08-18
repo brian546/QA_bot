@@ -57,9 +57,22 @@ def test_llm_settings_accept_valid_ollama_override() -> None:
     assert merged["top_p"] == 0.3
 
 
-def test_get_chat_model_returns_ollama_model() -> None:
+def test_get_chat_model_uses_openai_client_for_ollama() -> None:
     model = get_chat_model(_ollama_settings())
-    assert model.__class__.__name__ == "ChatOllama"
+    assert model.__class__.__name__ == "ChatOpenAI"
+    assert model.model_name == "gemma4:26b"
+    assert model.openai_api_key.get_secret_value() == "ollama"
+    assert str(model.openai_api_base) == "http://localhost:11434/v1"
+    assert model.max_retries == 0
+
+
+def test_get_chat_model_uses_openai_client_for_openrouter() -> None:
+    model = get_chat_model(_settings())
+    assert model.__class__.__name__ == "ChatOpenAI"
+    assert model.model_name == "openai/gpt-oss-120b:free"
+    assert model.openai_api_key.get_secret_value() == "x"
+    assert str(model.openai_api_base) == "https://openrouter.ai/api/v1"
+    assert model.max_retries == 1
 
 
 def test_split_provider_uses_openrouter_embeddings_and_ollama_agent() -> None:

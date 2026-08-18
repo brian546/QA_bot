@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_ollama import ChatOllama
-from langchain_openrouter import ChatOpenRouter
+from langchain_openai import ChatOpenAI
 
 from project.backend.app.core.config import Settings
 
@@ -41,22 +40,24 @@ def get_chat_model(settings: Settings, llm_settings: dict[str, Any] | None = Non
     """Create a provider-aware chat model from validated settings."""
     effective = validate_and_merge_llm_settings(settings, llm_settings)
     if settings.llm_provider == "ollama":
+        base_url = (settings.ollama_base_url.strip() or "http://localhost:11434").rstrip("/")
+        if not base_url.endswith("/v1"):
+            base_url = f"{base_url}/v1"
+        api_key = "ollama"
         timeout = float(settings.ollama_timeout)
-        return ChatOllama(
-            model=effective["model"],
-            base_url=settings.ollama_base_url,
-            temperature=effective["temperature"],
-            top_p=effective["top_p"],
-            client_kwargs={"timeout": timeout},
-            sync_client_kwargs={"timeout": timeout},
-        )
+        max_retries = 0
+    else:
+        base_url = settings.openrouter_base_url.rstrip("/")
+        api_key = settings.openrouter_api_key
+        timeout = float(settings.openrouter_timeout)
+        max_retries = settings.openrouter_max_retries
 
-    return ChatOpenRouter(
-        api_key=settings.openrouter_api_key,
+    return ChatOpenAI(
+        api_key=api_key,
         model=effective["model"],
-        base_url=settings.openrouter_base_url,
+        base_url=base_url,
         temperature=effective["temperature"],
         top_p=effective["top_p"],
-        timeout=settings.openrouter_timeout,
-        max_retries=settings.openrouter_max_retries,
+        timeout=timeout,
+        max_retries=max_retries,
     )

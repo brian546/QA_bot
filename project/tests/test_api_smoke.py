@@ -261,7 +261,7 @@ def test_answer_with_evidence_uses_ollama_image_payload(monkeypatch) -> None:
     assert isinstance(content, list)
     image_parts = [item for item in content if isinstance(item, dict) and item.get("type") == "image_url"]
     assert image_parts
-    assert image_parts[0]["image_url"].startswith("data:image/png;base64,")
+    assert image_parts[0]["image_url"]["url"].startswith("data:image/png;base64,")
 
 
 def test_is_answer_confident_uses_raw_image_payload(monkeypatch) -> None:
@@ -406,8 +406,12 @@ def test_ask_falls_back_to_uploaded_image_when_retrieval_is_empty(monkeypatch) -
 
 
 def test_answer_with_web_results_returns_simplified_web_citations(monkeypatch) -> None:
-    app = create_app()
-    settings = app.state.settings
+    settings = Settings(
+        OPENROUTER_API_KEY="test-key",
+        OPENROUTER_MODEL="openai/gpt-oss-120b:free",
+        OPENROUTER_ALLOWED_MODELS="openai/gpt-oss-120b:free",
+        TAVILY_API_KEY="test-key",
+    )
 
     class FakeModel:
         def invoke(self, messages):

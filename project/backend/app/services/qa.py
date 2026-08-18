@@ -121,7 +121,6 @@ def _build_image_human_content(
     prompt: str,
     rows: list[dict[str, Any]],
     effective_limit: int,
-    llm_provider: str,
     intro_suffix: str,
 ) -> list[dict[str, Any]]:
     """Build multimodal human content by attaching raw image payloads with evidence labels."""
@@ -141,10 +140,7 @@ def _build_image_human_content(
                 ),
             }
         )
-        if llm_provider == "ollama":
-            human_content.append({"type": "image_url", "image_url": image_data_url})
-        else:
-            human_content.append({"type": "image_url", "image_url": {"url": image_data_url}})
+        human_content.append({"type": "image_url", "image_url": {"url": image_data_url}})
 
     return human_content
 
@@ -398,7 +394,6 @@ def answer_with_evidence(
                 prompt,
                 fused_rows,
                 effective_limit,
-                settings.llm_provider,
                 "\n\nInspect the attached images directly before answering.",
             )
             response = model.invoke([SystemMessage(content=ANSWER_SYSTEM), HumanMessage(content=human_content)])
@@ -443,7 +438,6 @@ def is_answer_confident(
                 prompt,
                 citations,
                 effective_limit,
-                settings.llm_provider,
                 "\n\nUse the compressed text evidence and inspect the attached images before deciding.",
             )
             response = model.invoke([SystemMessage(content=CONFIDENCE_EVAL_SYSTEM), HumanMessage(content=human_content)])
