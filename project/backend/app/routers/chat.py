@@ -42,7 +42,13 @@ def ask_question(payload: AskRequest, request: Request) -> AskResponse:
     session.retrieval_settings = result.get("retrieval_settings", session.retrieval_settings)
 
     session.chat_history.append({"role": "user", "content": payload.question})
-    session.chat_history.append({"role": "assistant", "content": result.get("final_answer", "")})
+    session.chat_history.append(
+        {
+            "role": "assistant",
+            "content": result.get("final_answer", ""),
+            "retrieval_diagnostics": result.get("retrieval_diagnostics", {}),
+        }
+    )
 
     return AskResponse(
         answer=result.get("final_answer", "I could not find enough evidence in the uploaded PDFs."),

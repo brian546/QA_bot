@@ -107,6 +107,9 @@ TIME_SENSITIVE_KEYWORDS = (
     "breaking",
 )
 
+MAX_RAG_SEARCHES = 3
+MAX_WEB_SEARCHES = 3
+
 logger = logging.getLogger(__name__)
 
 
@@ -399,6 +402,8 @@ def answer_with_agent(
     web_results: list[dict[str, Any]] = []
     tool_trace: list[dict[str, Any]] = []
     seen_actions: set[tuple[str, str]] = set()
+    rag_search_count = 0
+    web_search_count = 0
     action, decision_retry = _agent_action(
         settings,
         question,
@@ -410,9 +415,14 @@ def answer_with_agent(
     )
     agent_actions: list[dict[str, Any]] = [dict(action)]
 
-    for _ in range(6):
+    for _ in range(MAX_RAG_SEARCHES + MAX_WEB_SEARCHES):
         action_name = str(action.get("action", "answer"))
         if action_name == "answer":
+            break
+
+        if action_name == "rag_search" and rag_search_count >= MAX_RAG_SEARCHES:
+            break
+        if action_name == "web_search" and web_search_count >= MAX_WEB_SEARCHES:
             break
 
         query = str(action.get("query", "")).strip() or question
@@ -422,6 +432,7 @@ def answer_with_agent(
         seen_actions.add(action_key)
 
         if action_name == "rag_search":
+            rag_search_count += 1
             result = rag_search(
                 settings,
                 session_store,
@@ -442,6 +453,7 @@ def answer_with_agent(
                 evidence_parts.append(str(result["evidence"]))
             local_rows.extend(result.get("fused_results", []))
         elif action_name == "web_search":
+            web_search_count += 1
             if settings.web_search_enabled and settings.tavily_api_key.strip():
                 results = search_web_with_tavily(settings, query)
                 _merge_web_results(web_results, results)
@@ -485,11 +497,13 @@ def answer_with_agent(
         "Answer using the evidence. Cite web evidence inline as direct Markdown links [title](url). "
         "Do not use numbered source citations. If evidence is insufficient, say so clearly."
     )
+    model: Any | None = None
+    answer_failed = False
     try:
-        model = get_chat_model(settings, llm_settings)
         has_image_evidence = any(
             str(row.get("image_data_url", "")).startswith("data:image/") for row in local_rows
         )
+        model = get_chat_model(settings, llm_settings)
         if has_image_evidence:
             human_content = _build_image_human_content(
                 prompt,
@@ -502,8 +516,26 @@ def answer_with_agent(
             response = model.invoke([SystemMessage(content=WEB_ANSWER_SYSTEM), HumanMessage(content=prompt)])
         answer = str(response.content).strip()
     except Exception as exc:
-        logger.error("Error in agent answer generation: %s", exc)
-        answer = "I could not generate a final answer from the available evidence."
+        logger.warning("Multimodal agent answer generation failed: %s", exc)
+        if has_image_evidence and model is not None:
+            try:
+                response = model.invoke([SystemMessage(content=WEB_ANSWER_SYSTEM), HumanMessage(content=prompt)])
+                answer = str(response.content).strip()
+                tool_trace.append(
+                    {
+                        "action": "answer_fallback",
+                        "status": "text_only",
+                        "reason": "Multimodal image payload was rejected by the model provider.",
+                    }
+                )
+            except Exception as fallback_exc:
+                logger.error("Text-only agent answer fallback failed: %s", fallback_exc)
+                answer = "I could not generate a final answer from the available evidence."
+                answer_failed = True
+        else:
+            logger.error("Agent answer generation failed: %s", exc)
+            answer = "I could not generate a final answer from the available evidence."
+            answer_failed = True
 
     citations = [
         {
@@ -527,6 +559,8 @@ def answer_with_agent(
         "web_search_queries": [item["query"] for item in tool_trace if item["action"] == "web_search"],
         "web_hits": web_results,
     }
+    if answer_failed:
+        diagnostics["answer_failed"] = True
     return answer, citations, diagnostics
 
 

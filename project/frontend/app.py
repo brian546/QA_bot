@@ -175,6 +175,9 @@ def main() -> None:
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+            if message["role"] == "assistant" and message.get("retrieval_diagnostics"):
+                with st.expander("Agent and retrieval diagnostics", expanded=False):
+                    st.json(message["retrieval_diagnostics"])
 
     st.bottom.file_uploader(
         uploader_label,
@@ -209,11 +212,18 @@ def main() -> None:
 
             answer = response.get("answer", "I could not find enough evidence in the uploaded documents.")
             st.markdown(answer)
-            st.session_state.messages.append({"role": "assistant", "content": answer})
-            st.session_state.retrieval_diagnostics = response.get("retrieval_diagnostics", {})
+            diagnostics = response.get("retrieval_diagnostics", {})
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": answer,
+                    "retrieval_diagnostics": diagnostics,
+                }
+            )
+            st.session_state.retrieval_diagnostics = diagnostics
 
             with st.expander("Agent and retrieval diagnostics", expanded=False):
-                st.json(response.get("retrieval_diagnostics", {}))
+                st.json(diagnostics)
 
 
 if __name__ == "__main__":

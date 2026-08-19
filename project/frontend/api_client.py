@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import mimetypes
+import os
 from typing import Any
 
 import requests
+
+
+UPLOAD_TIMEOUT = float(os.getenv("UPLOAD_TIMEOUT", "120"))
+ASK_TIMEOUT = float(os.getenv("ASK_TIMEOUT", "120"))
 
 
 class APIClient:
@@ -31,7 +36,7 @@ class APIClient:
             f"{self.base_url}/upload",
             data={"session_id": session_id},
             files=payload,
-            timeout=120,
+            timeout=UPLOAD_TIMEOUT,
         )
         response.raise_for_status()
         return response.json()
@@ -65,7 +70,7 @@ class APIClient:
         response = requests.post(
             f"{self.base_url}/ask",
             json=payload,
-            timeout=120,
+            timeout=ASK_TIMEOUT,
         )
         response.raise_for_status()
         return response.json()

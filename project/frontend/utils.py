@@ -240,7 +240,14 @@ def switch_session_state(client: APIClient, session_id: str) -> None:
     st.session_state.processed_files = set(session.get("processed_files", []))
     st.session_state.uploaded_docs = session.get("uploaded_documents", [])
     st.session_state.citations = []
-    st.session_state.retrieval_diagnostics = {}
+    st.session_state.retrieval_diagnostics = next(
+        (
+            message.get("retrieval_diagnostics", {})
+            for message in reversed(st.session_state.messages)
+            if message.get("role") == "assistant" and message.get("retrieval_diagnostics")
+        ),
+        {},
+    )
     st.session_state.uploader_key += 1
     st.session_state.selected_file_keys = set()
     st.session_state.upload_feedback = {

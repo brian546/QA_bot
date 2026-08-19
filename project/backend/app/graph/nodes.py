@@ -50,14 +50,15 @@ class GraphNodes:
         return state
 
     def evaluate_answer(self, state: GraphState) -> GraphState:
-        if not state.get("final_answer", "").strip():
-            state["should_web_search"] = False
+        diagnostics = state.get("retrieval_diagnostics") or {}
+        answer_failed_without_evidence = diagnostics.get("answer_failed") and not state.get("citations")
+        if not state.get("final_answer", "").strip() or answer_failed_without_evidence:
+            state["answer_is_confident"] = False
             state["should_fallback"] = True
-            state["error"] = "Agent did not produce an answer."
+            state["error"] = "Agent did not produce a usable answer."
             return state
 
         state["answer_is_confident"] = True
-        state["should_web_search"] = False
         state["should_fallback"] = False
         return state
 
@@ -65,5 +66,7 @@ class GraphNodes:
         state["final_answer"] = "I could not find enough evidence in the uploaded documents or images."
         state["citations"] = []
         state["answer_is_confident"] = False
+        state["should_fallback"] = False
+        state["route_decision"] = "fallback"
         state.setdefault("retrieval_diagnostics", {})
         return state

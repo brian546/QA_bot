@@ -50,7 +50,7 @@ class SessionListResponse(BaseModel):
 class SessionDetailResponse(BaseModel):
     session_id: str
     uploaded_documents: list[dict[str, Any]]
-    chat_history: list[dict[str, str]]
+    chat_history: list[dict[str, Any]]
     processed_files: list[str]
     llm_settings: dict[str, Any]
     retrieval_settings: dict[str, Any]

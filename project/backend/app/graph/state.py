@@ -15,7 +15,6 @@ class GraphState(TypedDict, total=False):
     rewritten_query: str
     lexical_results: list[dict[str, Any]]
     semantic_results: list[dict[str, Any]]
-    image_results: list[dict[str, Any]]
     fused_results: list[dict[str, Any]]
     compressed_context: str
     final_answer: str
@@ -31,4 +30,3 @@ class GraphState(TypedDict, total=False):
     route_decision: str
     error: str
     should_fallback: bool
-    should_web_search: bool

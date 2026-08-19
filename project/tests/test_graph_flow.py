@@ -110,5 +110,23 @@ def test_evaluate_answer_does_not_start_web_search_after_agent_answer() -> None:
     }
     result = nodes.evaluate_answer(state)
 
-    assert result.get("should_web_search") is False
     assert result.get("should_fallback") is True
+
+
+def test_evaluate_answer_routes_nonempty_failed_answer_to_fallback() -> None:
+    settings = Settings(
+        OPENROUTER_API_KEY="x",
+        OPENROUTER_MODEL="openai/gpt-oss-120b:free",
+        OPENROUTER_ALLOWED_MODELS="openai/gpt-oss-120b:free",
+    )
+    nodes = GraphNodes(settings, InMemorySessionStore())
+
+    result = nodes.evaluate_answer(
+        {
+            "final_answer": "I could not generate a final answer from the available evidence.",
+            "retrieval_diagnostics": {"answer_failed": True},
+        }
+    )
+
+    assert result["should_fallback"] is True
+    assert result["answer_is_confident"] is not True
