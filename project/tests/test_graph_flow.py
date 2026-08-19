@@ -15,7 +15,7 @@ def test_graph_routes_to_direct_answer_without_docs(monkeypatch) -> None:
     class FakeModel:
         def invoke(self, messages):
             class Response:
-                content = '{"use_web_search": false, "search_query": "", "reason": "Direct answer"}'
+                content = '{"action": "answer", "query": "", "session_id": "s1", "reason": "Direct answer"}'
 
             return Response()
 
@@ -30,7 +30,7 @@ def test_graph_routes_to_direct_answer_without_docs(monkeypatch) -> None:
         }
     )
 
-    assert result.get("route_decision") == "direct"
+    assert result.get("route_decision") == "agent"
     assert result.get("final_answer")
 
 
@@ -47,8 +47,8 @@ def test_graph_routes_time_sensitive_question_to_web_search(monkeypatch) -> None
         def __init__(self):
             self.responses = iter(
                 [
-                    '{"use_web_search": true, "search_query": "latest AI news", "reason": "Current information"}',
-                    '{"use_web_search": false, "search_query": "", "reason": "Enough web evidence"}',
+                    '{"action": "web_search", "query": "latest AI news", "session_id": "s2", "reason": "Current information"}',
+                    '{"action": "answer", "query": "", "session_id": "s2", "reason": "Enough web evidence"}',
                     "Latest update [Example Headline](https://example.com/news).",
                 ]
             )
@@ -79,9 +79,13 @@ def test_graph_routes_time_sensitive_question_to_web_search(monkeypatch) -> None
         }
     )
 
-    assert result.get("route_decision") == "web_search"
+    assert result.get("route_decision") == "agent"
     assert result.get("final_answer")
     assert result.get("retrieval_diagnostics", {}).get("web_search_queries") == ["latest AI news"]
+    assert [item["action"] for item in result["retrieval_diagnostics"]["agent_decisions"]] == [
+        "web_search",
+        "answer",
+    ]
     assert result["citations"][0]["url"] == "https://example.com/news"
 
 

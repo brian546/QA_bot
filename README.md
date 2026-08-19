@@ -8,7 +8,7 @@ Grounded multimodal question answering app built with FastAPI, Streamlit, LangGr
 - Keep uploads session-scoped, with duplicate skipping by normalized file key.
 - Sync uploader deselection to backend removal (`/upload/remove`).
 - Answer questions with hybrid retrieval (BM25 + semantic vectors) and citations.
-- Use Tavily web search when the agent detects time-sensitive or low-evidence questions.
+- Let `qa_agent` choose between local RAG, Tavily web search, or a direct answer.
 - Support follow-up questions using session chat history.
 - Expose session-scoped LLM and retrieval controls from backend runtime config.
 - Manage stored sessions from the UI: list, switch, delete, and start new session.
@@ -39,7 +39,7 @@ This section explains what each module does and how modules connect.
 
 - `state.py`: Typed graph state contract shared across all nodes.
 - `builder.py`: Declares nodes + edges and compiles workflow.
-- `nodes.py`: Node implementations for routing, retrieval, fusion, agent-controlled answer generation, and fallback handling.
+- `nodes.py`: Independent session ingestion, qa_agent execution, answer evaluation, and fallback handling.
 - `edges.py`: Conditional routing helpers between nodes.
 
 #### `services/` (domain logic)
@@ -52,7 +52,8 @@ This section explains what each module does and how modules connect.
 - `image_assets.py`: Extracts/stores PDF page images and metadata.
 - `image_retrieval.py`: Image embedding/indexing + image asset retrieval.
 - `hybrid_retrieval.py`: Weighted reciprocal rank fusion and retrieval diagnostics.
-- `qa.py`: Query rewriting, structured agent decisions, context compression, grounded answering, direct-link citation extraction, and Tavily search orchestration.
+- `qa.py`: Structured qa_agent actions, grounded answer generation, direct-link citation extraction, and web-search orchestration.
+- `rag_search.py`: Session-scoped RAG tool combining query retrieval, lexical/semantic/image search, fusion, compression, sources, and diagnostics.
 - `web_search.py`: Tavily integration for web search augmentation.
 - `media_store.py`: Storage abstraction for media artifacts (in-memory/filesystem).
 
@@ -96,33 +97,41 @@ flowchart TD
 	G --> H[Validate llm/retrieval settings]
 	H --> I[LangGraph invoke]
 
-	I --> J[query_router]
-	J -->|needs documents| K[rewrite_query]
-	K --> L[lexical_retrieve]
-	L --> M[semantic_retrieve]
-	M --> N[fuse_results]
-	N --> O[compress_context]
-	O --> P[answer_question]
+	I --> J[ingest_upload]
+	J --> K[qa_agent]
+	K -->|rag_search| RAG
+	subgraph RAG[RAG tool]
+		direction TB
+		R1[Load session chunks and indexes]
+		R1 --> R2[Lexical retrieval]
+		R1 --> R3[Semantic retrieval]
+		R1 --> R4[Image retrieval]
+		R2 --> R5[Weighted result fusion]
+		R3 --> R5
+		R4 --> R5
+		R5 --> R6[Context compression]
+		R6 --> R7[Package evidence and diagnostics]
+	end
+	RAG --> K
+	K -->|web_search| M[Tavily tool]
+	M --> K
+	K -->|answer| N[evaluate_answer]
 
-	J -->|no documents| P
-	P -->|agent decides web search| Q[Tavily search and query refinement]
-	Q -->|up to 3 distinct searches| P
-
-	P --> S[evaluate_answer]
-	S -->|confident| T[Return answer + citations + diagnostics]
-	S -->|insufficient evidence| U[fallback]
-	U --> T
+	N -->|valid answer| O[Return answer + citations + diagnostics]
+	N -->|empty answer| P[fallback]
+	P --> O
 ```
 
 ### Workflow in plain terms
 
 1. Upload path: `upload.py` parses files, creates chunks/assets, updates indices, and stores them per session.
 2. Ask path: `chat.py` merges runtime overrides and invokes compiled graph from `builder.py`.
-3. Routing path: graph chooses document retrieval when uploaded evidence is needed; every question then reaches `answer_question`.
-4. Retrieval path: lexical + semantic (+ image) hits are fused and compressed.
-5. Answer path: the agent decides whether local evidence is sufficient, optionally performs up to three refined Tavily searches, combines evidence, and generates direct Markdown citations.
-6. Evaluation path: the graph validates that an answer has evidence and citations; weak grounded document answers use the fallback response.
-7. Response path: API returns the answer, citations, agent/search diagnostics, and effective settings used.
+3. Ask path: every question reaches `qa_agent` after `ingest_upload` loads session metadata such as uploaded filenames and image counts.
+4. Tool path: the agent chooses structured actions: `rag_search`, `web_search`, or `answer`.
+5. RAG path: `rag_search(query, session_id)` retrieves the actual uploaded document chunks and images, then performs lexical + semantic + image retrieval, fusion, compression, and source packaging.
+6. RAG status path: `no_documents` means the session has no uploaded files; `no_results` means files exist but the query found no matching evidence. Retrieval failures return a structured `error` status.
+7. Research path: the agent may perform up to six total tool actions, refine queries, combine evidence, and generate direct Markdown citations.
+8. Response path: API returns the answer, citations, agent/tool diagnostics, and effective settings used. Agent planning history is exposed as `agent_decisions`; executed tools are exposed as `tool_trace`.
 
 ## Local Setup
 

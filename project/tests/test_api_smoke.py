@@ -363,20 +363,31 @@ def test_ask_falls_back_to_uploaded_image_when_retrieval_is_empty(monkeypatch) -
     )
     assert upload.status_code == 200
 
-    monkeypatch.setattr("project.backend.app.services.image_retrieval.retrieve_image_assets", lambda *args, **kwargs: [])
+    monkeypatch.setattr("project.backend.app.services.rag_search.retrieve_image_assets", lambda *args, **kwargs: [])
 
     captured_messages: list[object] = []
 
     class FakeModel:
+        def __init__(self):
+            self.responses = iter(
+                [
+                    '{"action": "rag_search", "query": "image contents", "session_id": "image-fallback", "reason": "Need visual evidence"}',
+                    '{"action": "answer", "query": "", "session_id": "image-fallback", "reason": "Image evidence is sufficient"}',
+                    "The image shows a simple icon.",
+                ]
+            )
+
         def invoke(self, messages):
             captured_messages.append(messages)
+            class Response:
+                pass
 
-            class _Response:
-                content = "The image shows a simple icon."
+            response = Response()
+            response.content = next(self.responses)
+            return response
 
-            return _Response()
-
-    monkeypatch.setattr("project.backend.app.services.qa.get_chat_model", lambda *args, **kwargs: FakeModel())
+    fake_model = FakeModel()
+    monkeypatch.setattr("project.backend.app.services.qa.get_chat_model", lambda *args, **kwargs: fake_model)
 
     response = client.post(
         "/ask",

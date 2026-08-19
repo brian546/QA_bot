@@ -9,6 +9,7 @@ class GraphState(TypedDict, total=False):
     accepted_files: list[str]
     uploaded_documents: list[dict[str, Any]]
     image_assets: list[dict[str, Any]]
+    session_content: dict[str, Any]
     chat_history: list[dict[str, str]]
     current_question: str
     rewritten_query: str

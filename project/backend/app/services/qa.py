@@ -76,16 +76,17 @@ WEB_ANSWER_SYSTEM = (
 )
 
 AGENT_DECISION_SYSTEM = (
-    "You are the answer planning agent for a grounded QA assistant. "
-    "Decide whether the available local evidence is enough to answer the user. "
-    "You may request web search when current information is needed or local evidence is insufficient. "
-    "You may refine the search query across multiple turns when results are weak. "
-    "Return JSON only with exactly these fields: use_web_search (boolean), search_query (string), reason (string)."
+    "You are qa_agent, an answer planning agent for grounded QA. "
+    "Choose exactly one action: rag_search, web_search, or answer. "
+    "Use rag_search for uploaded-document evidence, web_search for external/current evidence, "
+    "and answer when the available evidence is sufficient. "
+    "When uploaded session content exists but available evidence is empty, inspect it with rag_search before answering. "
+    "Return JSON only with exactly these fields: action, query, session_id, reason."
 )
 
 AGENT_DECISION_RETRY_SYSTEM = (
     "Return only valid JSON, with no markdown or explanation, using exactly these fields: "
-    "use_web_search (boolean), search_query (string), reason (string)."
+    "action, query, session_id, reason. action must be rag_search, web_search, or answer."
 )
 
 TIME_SENSITIVE_KEYWORDS = (
@@ -289,8 +290,8 @@ def answer_directly(
     return "Chat model is unavailable. Try again later."
 
 
-def _parse_agent_decision(content: str) -> dict[str, Any] | None:
-    """Parse a structured agent decision, including JSON wrapped in markdown fences."""
+def _parse_agent_action(content: str) -> dict[str, Any] | None:
+    """Parse a structured qa_agent action, including JSON wrapped in markdown fences."""
     candidate = content.strip()
     if candidate.startswith("```"):
         candidate = re.sub(r"^```(?:json)?\s*|\s*```$", "", candidate, flags=re.IGNORECASE).strip()
@@ -298,36 +299,41 @@ def _parse_agent_decision(content: str) -> dict[str, Any] | None:
         parsed = json.loads(candidate)
     except json.JSONDecodeError:
         return None
-    if not isinstance(parsed, dict) or not isinstance(parsed.get("use_web_search"), bool):
+    if not isinstance(parsed, dict) or parsed.get("action") not in {"rag_search", "web_search", "answer"}:
         return None
     return {
-        "use_web_search": parsed["use_web_search"],
-        "search_query": str(parsed.get("search_query", "")).strip(),
+        "action": parsed["action"],
+        "query": str(parsed.get("query", "")).strip(),
+        "session_id": str(parsed.get("session_id", "")).strip(),
         "reason": str(parsed.get("reason", "")).strip(),
     }
 
 
-def _agent_decision(
+def _agent_action(
     settings: Settings,
     question: str,
     chat_history: list[dict[str, str]],
-    local_evidence: str,
+    session_id: str,
+    evidence: str,
+    session_content: dict[str, Any],
     llm_settings: dict[str, Any],
 ) -> tuple[dict[str, Any], bool]:
-    """Ask the answer agent whether web evidence is needed, retrying malformed JSON once."""
+    """Ask qa_agent for its next action, retrying malformed JSON once."""
     history_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history[-6:])
     prompt = (
         f"Question:\n{question}\n\n"
         f"Recent history:\n{history_text}\n\n"
-        f"Available local evidence:\n{local_evidence or '(none)'}\n\n"
-        "Decide whether to use web search."
+        f"Available evidence:\n{evidence or '(none)'}\n\n"
+        f"Current session ID: {session_id}\n"
+        f"Uploaded session content: {json.dumps(session_content, ensure_ascii=True)}\n"
+        "Choose the next action."
     )
     try:
         model = get_chat_model(settings, llm_settings)
         response = model.invoke([SystemMessage(content=AGENT_DECISION_SYSTEM), HumanMessage(content=prompt)])
-        decision = _parse_agent_decision(str(response.content))
-        if decision is not None:
-            return decision, False
+        action = _parse_agent_action(str(response.content))
+        if action is not None:
+            return action, False
 
         retry = model.invoke(
             [
@@ -335,12 +341,12 @@ def _agent_decision(
                 HumanMessage(content=prompt),
             ]
         )
-        decision = _parse_agent_decision(str(retry.content))
-        if decision is not None:
-            return decision, True
+        action = _parse_agent_action(str(retry.content))
+        if action is not None:
+            return action, True
     except Exception as exc:
         logger.error("Error in agent web-search decision: %s", exc)
-    return {"use_web_search": False, "search_query": "", "reason": "Agent decision was unavailable."}, True
+    return {"action": "answer", "query": "", "session_id": session_id, "reason": "Agent decision was unavailable."}, True
 
 
 def _merge_web_results(results: list[dict[str, Any]], new_results: list[dict[str, Any]]) -> None:
@@ -376,61 +382,104 @@ def _markdown_link_citations(answer: str) -> list[dict[str, Any]]:
 
 def answer_with_agent(
     settings: Settings,
+    session_store: Any,
     question: str,
     chat_history: list[dict[str, str]],
-    local_evidence: str,
-    local_rows: list[dict[str, Any]],
+    session_id: str,
     llm_settings: dict[str, Any],
+    retrieval_settings: dict[str, Any] | None = None,
+    citation_limit: int | None = None,
+    session_content: dict[str, Any] | None = None,
 ) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
-    """Plan, optionally research, and answer a question through one agent controller."""
-    decision, decision_retry = _agent_decision(
+    """Plan, use RAG/web tools, and answer a question through one agent controller."""
+    from project.backend.app.services.rag_search import rag_search
+
+    evidence_parts: list[str] = []
+    local_rows: list[dict[str, Any]] = []
+    web_results: list[dict[str, Any]] = []
+    tool_trace: list[dict[str, Any]] = []
+    seen_actions: set[tuple[str, str]] = set()
+    action, decision_retry = _agent_action(
         settings,
         question,
         chat_history,
-        local_evidence,
+        session_id,
+        "",
+        session_content or {},
         llm_settings,
     )
-    web_results: list[dict[str, Any]] = []
-    search_queries: list[str] = []
-    search_trace: list[dict[str, Any]] = []
-    seen_queries: set[str] = set()
-    next_query = decision.get("search_query", "")
+    agent_actions: list[dict[str, Any]] = [dict(action)]
 
-    for _ in range(3):
-        if (
-            not decision.get("use_web_search")
-            or not next_query
-            or not settings.web_search_enabled
-            or not settings.tavily_api_key.strip()
-        ):
+    for _ in range(6):
+        action_name = str(action.get("action", "answer"))
+        if action_name == "answer":
             break
-        normalized_query = next_query.casefold()
-        if normalized_query in seen_queries:
+
+        query = str(action.get("query", "")).strip() or question
+        action_key = (action_name, query.casefold())
+        if action_key in seen_actions:
             break
-        seen_queries.add(normalized_query)
-        search_queries.append(next_query)
-        results = search_web_with_tavily(settings, next_query)
-        _merge_web_results(web_results, results)
-        search_trace.append({"query": next_query, "result_count": len(results)})
-        if not results:
+        seen_actions.add(action_key)
+
+        if action_name == "rag_search":
+            result = rag_search(
+                settings,
+                session_store,
+                query,
+                str(action.get("session_id", "")).strip() or session_id,
+                retrieval_settings,
+                citation_limit,
+            )
+            tool_trace.append(
+                {
+                    "action": "rag_search",
+                    "query": query,
+                    "status": result.get("status"),
+                    "source_count": len(result.get("sources", [])),
+                }
+            )
+            if result.get("evidence"):
+                evidence_parts.append(str(result["evidence"]))
+            local_rows.extend(result.get("fused_results", []))
+        elif action_name == "web_search":
+            if settings.web_search_enabled and settings.tavily_api_key.strip():
+                results = search_web_with_tavily(settings, query)
+                _merge_web_results(web_results, results)
+                status = "ok" if results else "no_results"
+            else:
+                results = []
+                status = "unavailable"
+            tool_trace.append(
+                {
+                    "action": "web_search",
+                    "query": query,
+                    "status": status,
+                    "result_count": len(results),
+                }
+            )
+            if results:
+                evidence_parts.append(
+                    "\n\n".join(
+                        f"Title: {row.get('title', '')}\nURL: {row.get('url', '')}\nSnippet: {row.get('content', '')}"
+                        for row in results
+                    )
+                )
+        else:
             break
-        decision, retry_used = _agent_decision(
+
+        action, retry_used = _agent_action(
             settings,
             question,
             chat_history,
-            f"{local_evidence}\n\nWeb evidence:\n{web_results}",
+            session_id,
+            "\n\n".join(evidence_parts),
+            session_content or {},
             llm_settings,
         )
+        agent_actions.append(dict(action))
         decision_retry = decision_retry or retry_used
-        next_query = decision.get("search_query", "")
 
-    evidence = local_evidence
-    if web_results:
-        web_block = "\n\n".join(
-            f"Title: {row.get('title', '')}\nURL: {row.get('url', '')}\nSnippet: {row.get('content', '')}"
-            for row in web_results
-        )
-        evidence = f"{evidence}\n\nWeb evidence:\n{web_block}".strip()
+    evidence = "\n\n".join(evidence_parts)
     prompt = (
         f"Question:\n{question}\n\nEvidence:\n{evidence or '(none)'}\n\n"
         "Answer using the evidence. Cite web evidence inline as direct Markdown links [title](url). "
@@ -471,10 +520,11 @@ def answer_with_agent(
     ]
     citations.extend(_markdown_link_citations(answer))
     diagnostics = {
-        "agent_decision": decision,
+        "agent_decisions": agent_actions,
         "agent_decision_retry": decision_retry,
-        "web_search_queries": search_queries,
-        "web_search_trace": search_trace,
+        "tool_trace": tool_trace,
+        "rag_searches": [item for item in tool_trace if item["action"] == "rag_search"],
+        "web_search_queries": [item["query"] for item in tool_trace if item["action"] == "web_search"],
         "web_hits": web_results,
     }
     return answer, citations, diagnostics

@@ -210,30 +210,7 @@ def main() -> None:
             answer = response.get("answer", "I could not find enough evidence in the uploaded documents.")
             st.markdown(answer)
             st.session_state.messages.append({"role": "assistant", "content": answer})
-            st.session_state.citations = response.get("citations", [])
             st.session_state.retrieval_diagnostics = response.get("retrieval_diagnostics", {})
-            citations = response.get("citations", [])
-
-            if citations:
-                with st.expander("Citations", expanded=False):
-                    for citation in citations:
-                        modality = str(citation.get("modality", "text"))
-                        if modality == "web":
-                            source = str(citation.get("source", "web"))
-                            title = str(citation.get("title", "")).strip() or source
-                            url = str(citation.get("url", "")).strip()
-                            if url:
-                                st.markdown(f"- [{title}]({url}) - {source} [web]")
-                            else:
-                                st.markdown(f"- **{title}** - {source} [web]")
-                        else:
-                            filename = str(citation.get("filename", "unknown"))
-                            page = citation.get("page")
-                            st.markdown(f"- **{filename}** p.{page} [{modality}] {citation.get('chunk_id', '')}")
-                        image_data_url = str(citation.get("image_data_url", ""))
-                        if image_data_url.startswith("data:image/"):
-                            image_caption = str(citation.get("filename", citation.get("title", "image")))
-                            st.image(image_data_url, caption=image_caption, use_container_width=True)
 
             with st.expander("Agent and retrieval diagnostics", expanded=False):
                 st.json(response.get("retrieval_diagnostics", {}))
