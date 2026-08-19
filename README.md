@@ -50,10 +50,10 @@ This section explains what each module does and how modules connect.
 - `lexical_retrieval.py`: BM25 index build + lexical retrieval.
 - `semantic_retrieval.py`: Embedding + FAISS vector retrieval.
 - `image_assets.py`: Extracts/stores PDF page images and metadata.
-- `image_retrieval.py`: Image embedding/indexing + image asset retrieval.
+- `image_retrieval.py`: Shared multimodal embedding clients used by the semantic FAISS index for text and images.
 - `hybrid_retrieval.py`: Weighted reciprocal rank fusion and retrieval diagnostics.
 - `qa.py`: Structured qa_agent actions, grounded answer generation, direct-link citation extraction, and web-search orchestration.
-- `rag_search.py`: Session-scoped RAG tool combining query retrieval, lexical/semantic/image search, fusion, compression, sources, and diagnostics.
+- `rag_search.py`: Session-scoped RAG tool combining lexical retrieval with semantic FAISS search over text and image embeddings, fusion, compression, sources, and diagnostics.
 - `web_search.py`: Tavily integration for web search augmentation.
 - `media_store.py`: Storage abstraction for media artifacts (in-memory/filesystem).
 
@@ -90,7 +90,7 @@ This section explains what each module does and how modules connect.
 flowchart TD
 	A[User uploads files in Streamlit] --> B[POST /upload]
 	B --> C[Parse + Chunk + Dedupe]
-	C --> D[Build BM25 + FAISS + Image indices]
+	C --> D[Build BM25 + shared semantic FAISS index]
 	D --> E[Session store updated]
 
 	F[User asks question] --> G[POST /ask]
@@ -104,11 +104,9 @@ flowchart TD
 		direction TB
 		R1[Load session chunks and indexes]
 		R1 --> R2[Lexical retrieval]
-		R1 --> R3[Semantic retrieval]
-		R1 --> R4[Image retrieval]
+		R1 --> R3["Semantic FAISS retrieval<br/>(text + images)"]
 		R2 --> R5[Weighted result fusion]
 		R3 --> R5
-		R4 --> R5
 		R5 --> R6[Context compression]
 		R6 --> R7[Package evidence and diagnostics]
 	end
@@ -128,7 +126,7 @@ flowchart TD
 2. Ask path: `chat.py` merges runtime overrides and invokes compiled graph from `builder.py`.
 3. Ask path: every question reaches `qa_agent` after `ingest_upload` loads session metadata such as uploaded filenames and image counts.
 4. Tool path: the agent chooses structured actions: `rag_search`, `web_search`, or `answer`.
-5. RAG path: `rag_search(query, session_id)` retrieves the actual uploaded document chunks and images, then performs lexical + semantic + image retrieval, fusion, compression, and source packaging.
+5. RAG path: `rag_search(query, session_id)` retrieves the actual uploaded document chunks and images, then performs lexical retrieval plus semantic FAISS retrieval over text and image embeddings, followed by fusion, compression, and source packaging.
 6. RAG status path: `no_documents` means the session has no uploaded files; `no_results` means files exist but the query found no matching evidence. Retrieval failures return a structured `error` status.
 7. Research path: the agent may perform up to six total tool actions, refine queries, combine evidence, and generate direct Markdown citations.
 8. Response path: API returns the answer, citations, agent/tool diagnostics, and effective settings used. Agent planning history is exposed as `agent_decisions`; executed tools are exposed as `tool_trace`.

@@ -18,18 +18,20 @@ def reciprocal_rank_fusion(
     fused_scores: dict[str, float] = defaultdict(float)
     merged_rows: dict[str, dict[str, Any]] = {}
 
-    for rank, row in enumerate(lexical_results, start=1):
-        chunk_id = str(row["chunk_id"])
-        fused_scores[chunk_id] += lexical_weight / (rank_constant + rank)
-        merged_rows.setdefault(chunk_id, row)
+    if lexical_weight > 0:
+        for rank, row in enumerate(lexical_results, start=1):
+            chunk_id = str(row["chunk_id"])
+            fused_scores[chunk_id] += lexical_weight / (rank_constant + rank)
+            merged_rows.setdefault(chunk_id, row)
 
-    for rank, row in enumerate(semantic_results, start=1):
-        chunk_id = str(row["chunk_id"])
-        fused_scores[chunk_id] += semantic_weight / (rank_constant + rank)
-        if chunk_id not in merged_rows:
-            merged_rows[chunk_id] = row
+    if semantic_weight > 0:
+        for rank, row in enumerate(semantic_results, start=1):
+            chunk_id = str(row["chunk_id"])
+            fused_scores[chunk_id] += semantic_weight / (rank_constant + rank)
+            if chunk_id not in merged_rows:
+                merged_rows[chunk_id] = row
 
-    if image_results:
+    if image_results and semantic_weight > 0:
         for rank, row in enumerate(image_results, start=1):
             chunk_id = str(row.get("chunk_id") or row.get("asset_id") or f"image:{row.get('filename', '')}:{row.get('page', '')}")
             fused_scores[chunk_id] += semantic_weight / (rank_constant + rank)

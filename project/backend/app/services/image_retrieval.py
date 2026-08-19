@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
 from typing import Any
-import numpy as np
 
 import httpx
+from langchain_core.embeddings import Embeddings
 
 from project.backend.app.core.config import Settings
 
-import logging
-logger = logging.getLogger(__name__)
 
 def _normalize_vector(vector: list[float]) -> list[float]:
     magnitude = math.sqrt(sum(value * value for value in vector))
@@ -19,22 +16,7 @@ def _normalize_vector(vector: list[float]) -> list[float]:
     return [value / magnitude for value in vector]
 
 
-def _cosine_similarity(left: list[float], right: list[float]) -> float:
-    """Compute cosine similarity between two vectors."""
-    if not left or not right:
-        logger.warning("One or both vectors are empty, returning similarity of 0.0")
-        return 0.0
-    if len(left) != len(right):
-        logger.warning("Vectors must be of the same size for cosine similarity, returning similarity of 0.0")    
-        return 0.0
-    
-    left_array = np.asarray(left)
-    right_array = np.asarray(right)
-    similarity = np.dot(left_array, right_array) / (np.linalg.norm(left_array) * np.linalg.norm(right_array))
-    return float(similarity)
-
-
-class LocalMultimodalEmbeddings:
+class LocalMultimodalEmbeddings(Embeddings):
     def __init__(self, dimension: int = 256) -> None:
         self.dimension = max(16, int(dimension))
 
@@ -54,11 +36,17 @@ class LocalMultimodalEmbeddings:
     def embed_text(self, text: str) -> list[float]:
         return self._hash_to_vector([text.encode("utf-8", errors="ignore")])
 
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self.embed_text(text) for text in texts]
+
+    def embed_query(self, text: str) -> list[float]:
+        return self.embed_text(text)
+
     def embed_image(self, image_data_url: str) -> list[float]:
         return self._hash_to_vector([image_data_url.encode("utf-8", errors="ignore")])
 
 
-class OpenRouterMultimodalEmbeddings:
+class OpenRouterMultimodalEmbeddings(Embeddings):
     def __init__(self, api_key: str, model: str, base_url: str, timeout: float, max_retries: int) -> None:
         self.api_key = api_key
         self.model = model
@@ -104,6 +92,12 @@ class OpenRouterMultimodalEmbeddings:
     def embed_text(self, text: str) -> list[float]:
         return self._request_embeddings([text])[0]
 
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self._request_embeddings(texts)
+
+    def embed_query(self, text: str) -> list[float]:
+        return self.embed_text(text)
+
     def embed_image(self, image_data_url: str) -> list[float]:
         payload = {
             "type": "image_url",
@@ -124,75 +118,4 @@ def get_multimodal_embeddings(settings: Settings) -> LocalMultimodalEmbeddings |
     return LocalMultimodalEmbeddings(dimension=settings.embedding_dimension)
 
 
-@dataclass
-class ImageVectorIndex:
-    embeddings: list[list[float]] = field(default_factory=list)
-    records: list[dict[str, Any]] = field(default_factory=list)
-    embedding_model: str = ""
-    backend: str = "memory"
 
-    def is_empty(self) -> bool:
-        return not self.embeddings or not self.records
-
-
-def build_image_index(image_assets: list[dict[str, Any]], settings: Settings) -> ImageVectorIndex | None:
-    if not image_assets:
-        return None
-
-    embeddings_client = get_multimodal_embeddings(settings)
-    vectors: list[list[float]] = []
-    records: list[dict[str, Any]] = []
-
-    for asset in image_assets:
-        image_data_url = str(asset.get("image_data_url", ""))
-        if not image_data_url:
-            continue
-        try:
-            vector = embeddings_client.embed_image(image_data_url)
-        except Exception:
-            vector = embeddings_client.embed_text(str(asset.get("text", "")))
-        vectors.append(vector)
-        records.append(dict(asset))
-
-    if not vectors:
-        return None
-    return ImageVectorIndex(embeddings=vectors, records=records, embedding_model=settings.active_image_embedding_model())
-
-
-def retrieve_image_assets(query: str, index: ImageVectorIndex | None, settings: Settings, top_k: int) -> list[dict[str, Any]]:
-    if index is None or index.is_empty() or not query.strip():
-        return []
-
-    embeddings_client = get_multimodal_embeddings(settings)
-    try:
-        query_vector = embeddings_client.embed_text(query)
-    except Exception:
-        return []
-
-    scored: list[tuple[int, float]] = []
-    for idx, vector in enumerate(index.embeddings):
-        scored.append((idx, _cosine_similarity(query_vector, vector)))
-
-    scored.sort(key=lambda item: item[1], reverse=True)
-
-    results: list[dict[str, Any]] = []
-    for idx, score in scored[: max(1, int(top_k))]:
-        record = dict(index.records[idx])
-        record.update({"score": float(score), "source": "image", "modality": "image"})
-        results.append(record)
-    return results
-
-
-def build_image_diagnostics(results: list[dict[str, Any]], top_k: int = 5) -> list[dict[str, Any]]:
-    summary: list[dict[str, Any]] = []
-    for row in results[: max(1, int(top_k))]:
-        summary.append(
-            {
-                "chunk_id": row.get("chunk_id"),
-                "filename": row.get("filename"),
-                "page": row.get("page"),
-                "score": row.get("score"),
-                "modality": row.get("modality", "image"),
-            }
-        )
-    return summary

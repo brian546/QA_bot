@@ -10,6 +10,7 @@ from langchain_core.embeddings import Embeddings
 from langchain_ollama import OllamaEmbeddings
 
 from project.backend.app.core.config import Settings, get_settings
+from project.backend.app.services.image_retrieval import get_multimodal_embeddings
 
 
 logger = logging.getLogger(__name__)
@@ -128,15 +129,57 @@ def get_embeddings_client(settings: Settings) -> Embeddings:
     return OpenRouterEmbeddings.from_settings(settings)
 
 
-def build_faiss_index(chunks: list[dict[str, Any]], embedding_dim: int) -> FAISS | None:
-    if not chunks:
+def build_faiss_index(
+    chunks: list[dict[str, Any]],
+    embedding_dim: int,
+    image_assets: list[dict[str, Any]] | None = None,
+) -> FAISS | None:
+    if not chunks and not image_assets:
         return None
-    docs = build_documents(chunks)
     _ = embedding_dim
     settings = get_settings()
-    embeddings = get_embeddings_client(settings)
+    embeddings = get_multimodal_embeddings(settings)
     try:
-        return FAISS.from_documents(docs, embeddings)
+        texts = [str(chunk["text"]) for chunk in chunks]
+        vectors = embeddings.embed_documents(texts)
+        metadatas = [
+            {
+                "chunk_id": chunk["chunk_id"],
+                "filename": chunk["filename"],
+                "page": chunk["page"],
+                "section": chunk.get("section"),
+                "modality": "text",
+            }
+            for chunk in chunks
+        ]
+
+        if image_assets:
+            multimodal_embeddings = get_multimodal_embeddings(settings)
+            image_inputs: list[str] = []
+            image_metadata: list[dict[str, Any]] = []
+            for asset in image_assets:
+                image_data_url = str(asset.get("image_data_url", ""))
+                if not image_data_url:
+                    continue
+                image_inputs.append(image_data_url)
+                image_metadata.append(
+                    {
+                        "chunk_id": asset.get("chunk_id") or asset.get("asset_id"),
+                        "asset_id": asset.get("asset_id"),
+                        "filename": asset.get("filename"),
+                        "page": asset.get("page"),
+                        "section": asset.get("section"),
+                        "modality": "image",
+                        "image_data_url": image_data_url,
+                        "storage_uri": asset.get("storage_uri"),
+                    }
+                )
+            if image_inputs:
+                vectors.extend([multimodal_embeddings.embed_image(value) for value in image_inputs])
+                texts.extend([str(metadata.get("filename", "image")) for metadata in image_metadata])
+                metadatas.extend(image_metadata)
+
+        return FAISS.from_embeddings(list(zip(texts, vectors)), embeddings, metadatas=metadatas)
     except Exception as exc:
         logger.warning("Semantic index build failed; using lexical retrieval only: %s", exc)
         return None
@@ -156,6 +199,10 @@ def retrieve_semantic(query: str, index: FAISS | None, top_k: int) -> list[dict[
                 "page": metadata.get("page"),
                 "section": metadata.get("section"),
                 "text": doc.page_content,
+                "asset_id": metadata.get("asset_id"),
+                "modality": metadata.get("modality", "text"),
+                "image_data_url": metadata.get("image_data_url"),
+                "storage_uri": metadata.get("storage_uri"),
                 "score": float(score),
                 "source": "semantic",
             }

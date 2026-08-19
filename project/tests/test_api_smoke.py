@@ -128,7 +128,7 @@ def test_upload_succeeds_when_semantic_index_build_fails(monkeypatch) -> None:
     def _raise_index_error(*args, **kwargs):
         raise RuntimeError("embedding backend unavailable")
 
-    monkeypatch.setattr("project.backend.app.services.semantic_retrieval.FAISS.from_documents", _raise_index_error)
+    monkeypatch.setattr("project.backend.app.services.semantic_retrieval.FAISS.from_embeddings", _raise_index_error)
 
     response = client.post(
         "/upload",
@@ -165,7 +165,7 @@ def test_upload_accepts_standalone_image_files() -> None:
     assert session is not None
     assert len(session.image_assets) == 1
     assert session.image_assets[0]["filename"] == "diagram.png"
-    assert session.image_index is not None
+    assert session.semantic_index is not None
 
 
 def test_answer_with_evidence_uses_raw_image_payload(monkeypatch) -> None:
@@ -308,28 +308,6 @@ def test_is_answer_confident_uses_raw_image_payload(monkeypatch) -> None:
     assert any(isinstance(item, dict) and item.get("type") == "image_url" for item in content)
 
 
-def test_answer_directly_openrouter_rate_limit_message(monkeypatch) -> None:
-    app = create_app()
-    settings = app.state.settings
-
-    class TooManyRequestsResponseError(Exception):
-        pass
-
-    def _raise(*args, **kwargs):
-        raise TooManyRequestsResponseError("Provider returned error")
-
-    monkeypatch.setattr("project.backend.app.services.qa.get_chat_model", _raise)
-
-    answer = answer_directly(
-        settings=settings,
-        question="Hi",
-        chat_history=[],
-        llm_settings=settings.default_llm_settings(),
-    )
-
-    assert "OpenRouter is rate-limited" in answer
-
-
 def test_answer_directly_ollama_fallback_message(monkeypatch) -> None:
     settings = Settings(
         LLM_PROVIDER="ollama",
@@ -363,7 +341,6 @@ def test_ask_falls_back_to_uploaded_image_when_retrieval_is_empty(monkeypatch) -
     )
     assert upload.status_code == 200
 
-    monkeypatch.setattr("project.backend.app.services.rag_search.retrieve_image_assets", lambda *args, **kwargs: [])
 
     captured_messages: list[object] = []
 

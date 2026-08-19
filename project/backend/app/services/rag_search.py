@@ -5,7 +5,6 @@ from typing import Any
 from project.backend.app.core.config import Settings
 from project.backend.app.core.session_store import InMemorySessionStore
 from project.backend.app.services.hybrid_retrieval import build_diagnostics, reciprocal_rank_fusion
-from project.backend.app.services.image_retrieval import retrieve_image_assets
 from project.backend.app.services.lexical_retrieval import retrieve_lexical
 from project.backend.app.services.semantic_retrieval import retrieve_semantic
 
@@ -55,22 +54,12 @@ def rag_search(
     try:
         lexical_results = retrieve_lexical(query, session.chunks, session.lexical_index, top_k)
         semantic_results = retrieve_semantic(query, session.semantic_index, top_k)
-        image_results = retrieve_image_assets(query, session.image_index, settings, top_k)
-        if not image_results and session.image_assets and (not session.chunks or any(
-            token in query.lower()
-            for token in ("image", "photo", "picture", "screenshot", "figure", "diagram", "chart", "visual")
-        )):
-            image_results = [
-                dict(asset, score=0.0, source="image", modality="image")
-                for asset in session.image_assets[:top_k]
-            ]
         fused_results = reciprocal_rank_fusion(
             lexical_results,
             semantic_results,
             lexical_weight=lexical_weight,
             semantic_weight=semantic_weight,
             top_k=top_k,
-            image_results=image_results,
         )
     except Exception as exc:
         return {
@@ -91,7 +80,7 @@ def rag_search(
             "images": [],
             "diagnostics": {
                 "status": "no_results",
-                **build_diagnostics(lexical_results, semantic_results, [], top_k, image_results),
+                **build_diagnostics(lexical_results, semantic_results, [], top_k),
             },
         }
 
@@ -128,7 +117,7 @@ def rag_search(
         "images": images,
         "diagnostics": {
             "status": "ok",
-            **build_diagnostics(lexical_results, semantic_results, fused_results, top_k, image_results),
+                **build_diagnostics(lexical_results, semantic_results, fused_results, top_k),
         },
         "fused_results": fused_results,
     }

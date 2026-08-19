@@ -16,6 +16,29 @@ def test_hybrid_fusion_deduplicates_by_chunk_id() -> None:
     assert "c2" in ids
 
 
+def test_lexical_only_fusion_excludes_semantic_image_results() -> None:
+    lexical = [{"chunk_id": "text-1", "filename": "a.pdf", "page": 1, "text": "foo"}]
+    semantic = [
+        {
+            "chunk_id": "image-1",
+            "filename": "diagram.png",
+            "page": 1,
+            "modality": "image",
+            "image_data_url": "data:image/png;base64,abc",
+        }
+    ]
+
+    fused = reciprocal_rank_fusion(
+        lexical,
+        semantic,
+        lexical_weight=1.0,
+        semantic_weight=0.0,
+        top_k=5,
+    )
+
+    assert [row["chunk_id"] for row in fused] == ["text-1"]
+
+
 def test_build_diagnostics_respects_top_k() -> None:
     rows = [
         {"chunk_id": f"c{idx}", "filename": "a.pdf", "page": idx, "score": float(idx)}

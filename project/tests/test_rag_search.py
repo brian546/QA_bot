@@ -31,11 +31,11 @@ def test_rag_search_accepts_image_only_session(monkeypatch) -> None:
         }
     )
     monkeypatch.setattr("project.backend.app.services.rag_search.retrieve_lexical", lambda *args: [])
-    monkeypatch.setattr("project.backend.app.services.rag_search.retrieve_semantic", lambda *args: [])
     monkeypatch.setattr(
-        "project.backend.app.services.rag_search.retrieve_image_assets",
+        "project.backend.app.services.rag_search.retrieve_semantic",
         lambda *args: [
             {
+                "chunk_id": "image-1",
                 "asset_id": "image-1",
                 "filename": "screenshot.png",
                 "image_data_url": "data:image/png;base64,abc",
@@ -61,7 +61,6 @@ def test_rag_search_returns_no_results_when_documents_do_not_match(monkeypatch) 
     session.uploaded_documents.append({"filename": "policy.pdf"})
     monkeypatch.setattr("project.backend.app.services.rag_search.retrieve_lexical", lambda *args: [])
     monkeypatch.setattr("project.backend.app.services.rag_search.retrieve_semantic", lambda *args: [])
-    monkeypatch.setattr("project.backend.app.services.rag_search.retrieve_image_assets", lambda *args: [])
 
     result = rag_search(_settings(), store, "unrelated", "session-with-docs")
 
