@@ -4,7 +4,7 @@ from project.backend.app.graph.builder import build_graph
 from project.backend.app.graph.nodes import GraphNodes
 
 
-def test_graph_routes_to_direct_answer_without_docs() -> None:
+def test_graph_routes_to_direct_answer_without_docs(monkeypatch) -> None:
     settings = Settings(
         OPENROUTER_API_KEY="x",
         OPENROUTER_MODEL="openai/gpt-oss-120b:free",
@@ -12,6 +12,14 @@ def test_graph_routes_to_direct_answer_without_docs() -> None:
     )
     store = InMemorySessionStore()
     graph = build_graph(settings, store)
+    class FakeModel:
+        def invoke(self, messages):
+            class Response:
+                content = '{"use_web_search": false, "search_query": "", "reason": "Direct answer"}'
+
+            return Response()
+
+    monkeypatch.setattr("project.backend.app.services.qa.get_chat_model", lambda *args, **kwargs: FakeModel())
 
     result = graph.invoke(
         {
@@ -35,15 +43,31 @@ def test_graph_routes_time_sensitive_question_to_web_search(monkeypatch) -> None
     )
     store = InMemorySessionStore()
     graph = build_graph(settings, store)
+    class FakeModel:
+        def __init__(self):
+            self.responses = iter(
+                [
+                    '{"use_web_search": true, "search_query": "latest AI news", "reason": "Current information"}',
+                    '{"use_web_search": false, "search_query": "", "reason": "Enough web evidence"}',
+                    "Latest update [Example Headline](https://example.com/news).",
+                ]
+            )
+
+        def invoke(self, messages):
+            content = next(self.responses)
+
+            class Response:
+                pass
+
+            response = Response()
+            response.content = content
+            return response
+
+    fake_model = FakeModel()
+    monkeypatch.setattr("project.backend.app.services.qa.get_chat_model", lambda *args, **kwargs: fake_model)
     monkeypatch.setattr(
-        "project.backend.app.graph.nodes.search_web_with_tavily",
-        lambda *_: [
-            {
-                "title": "Example Headline",
-                "url": "https://example.com/news",
-                "content": "Snippet",
-            }
-        ],
+        "project.backend.app.services.qa.search_web_with_tavily",
+        lambda *_: [{"title": "Example Headline", "url": "https://example.com/news", "content": "Snippet"}],
     )
 
     result = graph.invoke(
@@ -57,11 +81,11 @@ def test_graph_routes_time_sensitive_question_to_web_search(monkeypatch) -> None
 
     assert result.get("route_decision") == "web_search"
     assert result.get("final_answer")
-    assert result.get("citations")
-    assert str(result["citations"][0].get("modality", "")) == "web"
+    assert result.get("retrieval_diagnostics", {}).get("web_search_queries") == ["latest AI news"]
+    assert result["citations"][0]["url"] == "https://example.com/news"
 
 
-def test_evaluate_answer_uses_web_search_when_grounding_is_insufficient_for_time_sensitive_query() -> None:
+def test_evaluate_answer_does_not_start_web_search_after_agent_answer() -> None:
     settings = Settings(
         OPENROUTER_API_KEY="x",
         OPENROUTER_MODEL="openai/gpt-oss-120b:free",
@@ -82,5 +106,5 @@ def test_evaluate_answer_uses_web_search_when_grounding_is_insufficient_for_time
     }
     result = nodes.evaluate_answer(state)
 
-    assert result.get("should_web_search") is True
-    assert result.get("should_fallback") is False
+    assert result.get("should_web_search") is False
+    assert result.get("should_fallback") is True

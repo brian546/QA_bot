@@ -416,7 +416,7 @@ def test_answer_with_web_results_returns_simplified_web_citations(monkeypatch) -
     class FakeModel:
         def invoke(self, messages):
             class _Response:
-                content = "Latest update from sources [source 1]."
+                content = "Latest update from sources [source 3] and [source 1]."
 
             return _Response()
 
@@ -428,21 +428,68 @@ def test_answer_with_web_results_returns_simplified_web_citations(monkeypatch) -
         [],
         [
             {
+                "title": "Unused Headline",
+                "url": "https://unused.example.com/news",
+                "content": "Unused snippet",
+            },
+            {
                 "title": "Example Headline",
-                "url": "https://example.com/news",
-                "content": "Snippet",
+                "url": "https://example.com/second",
+                "content": "Second snippet",
                 "published_date": "2026-06-12",
+            },
+            {
+                "title": "Third Headline",
+                "url": "https://third.example.com/news",
+                "content": "Third snippet",
             }
         ],
         settings.default_llm_settings(),
     )
 
     assert answer
-    assert citations
-    citation = citations[0]
-    assert citation["modality"] == "web"
-    assert citation["title"] == "Example Headline"
-    assert citation["url"] == "https://example.com/news"
-    assert citation["source"] == "example.com"
-    assert "page" not in citation
-    assert "chunk_id" not in citation
+    assert "[source 3]" not in answer
+    assert "[source 1]" not in answer
+    assert "[Unused Headline](https://unused.example.com/news)" in answer
+    assert "[Third Headline](https://third.example.com/news)" in answer
+    assert [citation["title"] for citation in citations] == ["Unused Headline", "Third Headline"]
+    assert citations[0]["modality"] == "web"
+    assert citations[0]["url"] == "https://unused.example.com/news"
+    assert citations[0]["source"] == "unused.example.com"
+    assert "page" not in citations[0]
+    assert "chunk_id" not in citations[0]
+
+
+def test_answer_with_web_results_removes_invalid_source_numbers(monkeypatch) -> None:
+    settings = Settings(
+        OPENROUTER_API_KEY="test-key",
+        OPENROUTER_MODEL="openai/gpt-oss-120b:free",
+        OPENROUTER_ALLOWED_MODELS="openai/gpt-oss-120b:free",
+        TAVILY_API_KEY="test-key",
+    )
+
+    class FakeModel:
+        def invoke(self, messages):
+            class _Response:
+                content = "Current information [source 5] is supported by [source 2]."
+
+            return _Response()
+
+    monkeypatch.setattr("project.backend.app.services.qa.get_chat_model", lambda *args, **kwargs: FakeModel())
+
+    answer, citations = answer_with_web_results(
+        settings,
+        "What is current today?",
+        [],
+        [
+            {"title": "First", "url": "https://one.example.com", "content": "One"},
+            {"title": "Second", "url": "https://two.example.com", "content": "Two"},
+            {"title": "Third", "url": "https://three.example.com", "content": "Three"},
+            {"title": "Fourth", "url": "https://four.example.com", "content": "Four"},
+        ],
+        settings.default_llm_settings(),
+    )
+
+    assert "[source 5]" not in answer
+    assert "[Second](https://two.example.com)" in answer
+    assert [citation["title"] for citation in citations] == ["Second"]

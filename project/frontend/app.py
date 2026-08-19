@@ -222,12 +222,10 @@ def main() -> None:
                             source = str(citation.get("source", "web"))
                             title = str(citation.get("title", "")).strip() or source
                             url = str(citation.get("url", "")).strip()
-                            published = str(citation.get("published_date", "")).strip()
-                            date_suffix = f" ({published})" if published else ""
                             if url:
-                                st.markdown(f"- [{title}]({url}) - {source}{date_suffix} [web]")
+                                st.markdown(f"- [{title}]({url}) - {source} [web]")
                             else:
-                                st.markdown(f"- **{title}** - {source}{date_suffix} [web]")
+                                st.markdown(f"- **{title}** - {source} [web]")
                         else:
                             filename = str(citation.get("filename", "unknown"))
                             page = citation.get("page")
@@ -237,15 +235,8 @@ def main() -> None:
                             image_caption = str(citation.get("filename", citation.get("title", "image")))
                             st.image(image_data_url, caption=image_caption, use_container_width=True)
 
-            if citations:
-                with st.expander("Retrieval diagnostics", expanded=False):
-                    st.json(response.get("retrieval_diagnostics", {}))
-
-            with st.expander("Effective LLM settings", expanded=False):
-                st.json(response.get("effective_llm_settings", {}))
-
-            with st.expander("Effective retrieval settings", expanded=False):
-                st.json(response.get("effective_retrieval_settings", {}))
+            with st.expander("Agent and retrieval diagnostics", expanded=False):
+                st.json(response.get("retrieval_diagnostics", {}))
 
 
 if __name__ == "__main__":

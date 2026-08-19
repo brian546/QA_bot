@@ -10,17 +10,12 @@ from project.backend.app.services.hybrid_retrieval import build_diagnostics, rec
 from project.backend.app.services.lexical_retrieval import retrieve_lexical
 from project.backend.app.services.image_retrieval import build_image_diagnostics, retrieve_image_assets
 from project.backend.app.services.qa import (
-    answer_directly,
-    answer_with_evidence,
-    answer_with_web_results,
+    answer_with_agent,
     compress_evidence,
-    is_answer_confident,
     rewrite_query_with_history,
     should_search_documents,
-    should_search_web,
 )
 from project.backend.app.services.semantic_retrieval import retrieve_semantic
-from project.backend.app.services.web_search import search_web_with_tavily
 
 
 class GraphNodes:
@@ -104,10 +99,6 @@ class GraphNodes:
             llm_settings,
         )
 
-        # No docs means retrieval is impossible, so route direct.
-        if not docs_available:
-            needs_search = False
-
         state["llm_settings"] = llm_settings
         state["needs_document_search"] = needs_search
         state["route_decision"] = "search" if needs_search else "direct"
@@ -125,27 +116,6 @@ class GraphNodes:
             state.get("llm_settings", {}),
         )
         state["rewritten_query"] = rewritten
-        return state
-
-    def decide_web_search(self, state: GraphState) -> GraphState:
-        needs_web_search = should_search_web(
-            self.settings,
-            state.get("current_question", ""),
-            state.get("chat_history", []),
-            state.get("llm_settings", {}),
-            allow_model_inference=False,
-        )
-        state["needs_web_search"] = needs_web_search
-        return state
-
-    def web_search(self, state: GraphState) -> GraphState:
-        query = state.get("rewritten_query") or state.get("current_question", "")
-        results = search_web_with_tavily(self.settings, query)
-        state["web_search_results"] = results
-        state["route_decision"] = "web_search"
-        diagnostics = state.get("retrieval_diagnostics") or {}
-        diagnostics["web_hits"] = results
-        state["retrieval_diagnostics"] = diagnostics
         return state
 
     def lexical_retrieve(self, state: GraphState) -> GraphState:
@@ -215,61 +185,25 @@ class GraphNodes:
         return state
 
     def answer_question(self, state: GraphState) -> GraphState:
-        if state.get("route_decision") == "web_search":
-            answer, citations = answer_with_web_results(
-                self.settings,
-                state.get("current_question", ""),
-                state.get("chat_history", []),
-                state.get("web_search_results", []),
-                state.get("llm_settings", {}),
-            )
-            state["final_answer"] = answer
-            state["citations"] = citations
-            diagnostics = state.get("retrieval_diagnostics") or {}
-            diagnostics.setdefault("lexical_hits", [])
-            diagnostics.setdefault("semantic_hits", [])
-            diagnostics.setdefault("image_hits", [])
-            diagnostics.setdefault("fused_hits", [])
-            diagnostics.setdefault("web_hits", state.get("web_search_results", []))
-            state["retrieval_diagnostics"] = diagnostics
-            return state
-
-        if state.get("route_decision") == "direct":
-            answer = answer_directly(
-                self.settings,
-                state.get("current_question", ""),
-                state.get("chat_history", []),
-                state.get("llm_settings", {}),
-            )
-            state["final_answer"] = answer
-            state["citations"] = []
-            state["retrieval_diagnostics"] = {
-                "lexical_hits": [],
-                "semantic_hits": [],
-                "image_hits": [],
-                "fused_hits": [],
-                "web_hits": [],
-            }
-            return state
-
-        requested_citations = state.get("citations_k")
-        default_citations = int(self.settings.citations_default_k)
-        capped_default = min(default_citations, int(self.settings.citations_max_k))
-        citation_limit = int(requested_citations) if requested_citations is not None else capped_default
-        citation_limit = max(1, min(citation_limit, int(self.settings.citations_max_k)))
-        citation_limit = min(citation_limit, len(state.get("fused_results", [])))
-        citation_limit = max(1, citation_limit)
-
-        answer, citations = answer_with_evidence(
+        local_evidence = state.get("compressed_context", "")
+        answer, citations, agent_diagnostics = answer_with_agent(
             self.settings,
             state.get("current_question", ""),
-            state.get("compressed_context", ""),
+            state.get("chat_history", []),
+            local_evidence,
             state.get("fused_results", []),
             state.get("llm_settings", {}),
-            citation_limit,
         )
         state["final_answer"] = answer
         state["citations"] = citations
+        diagnostics = state.get("retrieval_diagnostics") or {}
+        diagnostics.update(agent_diagnostics)
+        diagnostics.setdefault("lexical_hits", [])
+        diagnostics.setdefault("semantic_hits", [])
+        diagnostics.setdefault("image_hits", [])
+        diagnostics.setdefault("fused_hits", [])
+        state["retrieval_diagnostics"] = diagnostics
+        state["route_decision"] = "web_search" if agent_diagnostics.get("web_hits") else "direct"
         return state
 
     def evaluate_answer(self, state: GraphState) -> GraphState:
@@ -289,41 +223,12 @@ class GraphNodes:
             return state
 
         if not has_evidence or not has_citations:
-            try_web = should_search_web(
-                self.settings,
-                state.get("current_question", ""),
-                state.get("chat_history", []),
-                state.get("llm_settings", {}),
-                allow_model_inference=True,
-            )
-            state["should_web_search"] = try_web
-            state["should_fallback"] = not try_web
+            state["should_web_search"] = False
+            state["should_fallback"] = True
             state["error"] = "Insufficient evidence for grounded answer."
             return state
 
-        confident = is_answer_confident(
-            self.settings,
-            state.get("current_question", ""),
-            state.get("final_answer", ""),
-            state.get("compressed_context", ""),
-            state.get("citations", []),
-            state.get("llm_settings", {}),
-        )
-        state["answer_is_confident"] = confident
-
-        if not confident:
-            try_web = should_search_web(
-                self.settings,
-                state.get("current_question", ""),
-                state.get("chat_history", []),
-                state.get("llm_settings", {}),
-                allow_model_inference=True,
-            )
-            state["should_web_search"] = try_web
-            state["should_fallback"] = not try_web
-            state["error"] = "Insufficient confidence in grounded answer."
-            return state
-
+        state["answer_is_confident"] = True
         state["should_web_search"] = False
         state["should_fallback"] = False
         return state

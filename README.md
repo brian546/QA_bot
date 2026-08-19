@@ -39,7 +39,7 @@ This section explains what each module does and how modules connect.
 
 - `state.py`: Typed graph state contract shared across all nodes.
 - `builder.py`: Declares nodes + edges and compiles workflow.
-- `nodes.py`: Node implementations for routing, retrieval, fusion, answer generation, and confidence checks.
+- `nodes.py`: Node implementations for routing, retrieval, fusion, agent-controlled answer generation, and fallback handling.
 - `edges.py`: Conditional routing helpers between nodes.
 
 #### `services/` (domain logic)
@@ -52,7 +52,7 @@ This section explains what each module does and how modules connect.
 - `image_assets.py`: Extracts/stores PDF page images and metadata.
 - `image_retrieval.py`: Image embedding/indexing + image asset retrieval.
 - `hybrid_retrieval.py`: Weighted reciprocal rank fusion and retrieval diagnostics.
-- `qa.py`: Query rewrite, routing heuristics, context compression, grounded answering, confidence evaluation.
+- `qa.py`: Query rewriting, structured agent decisions, context compression, grounded answering, direct-link citation extraction, and Tavily search orchestration.
 - `web_search.py`: Tavily integration for web search augmentation.
 - `media_store.py`: Storage abstraction for media artifacts (in-memory/filesystem).
 
@@ -104,15 +104,13 @@ flowchart TD
 	N --> O[compress_context]
 	O --> P[answer_question]
 
-	J -->|direct/web decision| Q[decide_web_search]
-	Q -->|yes| R[web_search]
-	Q -->|no| P
-	R --> P
+	J -->|no documents| P
+	P -->|agent decides web search| Q[Tavily search and query refinement]
+	Q -->|up to 3 distinct searches| P
 
 	P --> S[evaluate_answer]
 	S -->|confident| T[Return answer + citations + diagnostics]
-	S -->|low confidence| R
-	S -->|still weak| U[fallback]
+	S -->|insufficient evidence| U[fallback]
 	U --> T
 ```
 
@@ -120,10 +118,11 @@ flowchart TD
 
 1. Upload path: `upload.py` parses files, creates chunks/assets, updates indices, and stores them per session.
 2. Ask path: `chat.py` merges runtime overrides and invokes compiled graph from `builder.py`.
-3. Routing path: graph decides direct answer vs document retrieval vs web search.
+3. Routing path: graph chooses document retrieval when uploaded evidence is needed; every question then reaches `answer_question`.
 4. Retrieval path: lexical + semantic (+ image) hits are fused and compressed.
-5. Answer path: `qa.py` generates grounded answer and evaluates confidence.
-6. Response path: API returns answer, citations, diagnostics, and effective settings used.
+5. Answer path: the agent decides whether local evidence is sufficient, optionally performs up to three refined Tavily searches, combines evidence, and generates direct Markdown citations.
+6. Evaluation path: the graph validates that an answer has evidence and citations; weak grounded document answers use the fallback response.
+7. Response path: API returns the answer, citations, agent/search diagnostics, and effective settings used.
 
 ## Local Setup
 

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import json
+import logging
+import re
 from typing import Any
 from urllib.parse import urlparse
 
@@ -8,8 +11,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from project.backend.app.core.config import Settings
 from project.backend.app.core.llm import get_chat_model
-
-import logging
+from project.backend.app.services.web_search import search_web_with_tavily
 
 REWRITE_SYSTEM = (
     "Rewrite the user question into a standalone retrieval query. "
@@ -69,8 +71,21 @@ WEB_ROUTER_SYSTEM = (
 
 WEB_ANSWER_SYSTEM = (
     "You are a helpful assistant using web snippets as evidence. "
-    "Answer with concise factual statements and cite web sources inline as [source N]. "
+    "Answer with concise factual statements and cite web sources inline as Markdown links using the exact source title and URL. "
     "If sources are weak or missing, say uncertainty clearly."
+)
+
+AGENT_DECISION_SYSTEM = (
+    "You are the answer planning agent for a grounded QA assistant. "
+    "Decide whether the available local evidence is enough to answer the user. "
+    "You may request web search when current information is needed or local evidence is insufficient. "
+    "You may refine the search query across multiple turns when results are weak. "
+    "Return JSON only with exactly these fields: use_web_search (boolean), search_query (string), reason (string)."
+)
+
+AGENT_DECISION_RETRY_SYSTEM = (
+    "Return only valid JSON, with no markdown or explanation, using exactly these fields: "
+    "use_web_search (boolean), search_query (string), reason (string)."
 )
 
 TIME_SENSITIVE_KEYWORDS = (
@@ -274,6 +289,197 @@ def answer_directly(
     return "Chat model is unavailable. Try again later."
 
 
+def _parse_agent_decision(content: str) -> dict[str, Any] | None:
+    """Parse a structured agent decision, including JSON wrapped in markdown fences."""
+    candidate = content.strip()
+    if candidate.startswith("```"):
+        candidate = re.sub(r"^```(?:json)?\s*|\s*```$", "", candidate, flags=re.IGNORECASE).strip()
+    try:
+        parsed = json.loads(candidate)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("use_web_search"), bool):
+        return None
+    return {
+        "use_web_search": parsed["use_web_search"],
+        "search_query": str(parsed.get("search_query", "")).strip(),
+        "reason": str(parsed.get("reason", "")).strip(),
+    }
+
+
+def _agent_decision(
+    settings: Settings,
+    question: str,
+    chat_history: list[dict[str, str]],
+    local_evidence: str,
+    llm_settings: dict[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    """Ask the answer agent whether web evidence is needed, retrying malformed JSON once."""
+    history_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in chat_history[-6:])
+    prompt = (
+        f"Question:\n{question}\n\n"
+        f"Recent history:\n{history_text}\n\n"
+        f"Available local evidence:\n{local_evidence or '(none)'}\n\n"
+        "Decide whether to use web search."
+    )
+    try:
+        model = get_chat_model(settings, llm_settings)
+        response = model.invoke([SystemMessage(content=AGENT_DECISION_SYSTEM), HumanMessage(content=prompt)])
+        decision = _parse_agent_decision(str(response.content))
+        if decision is not None:
+            return decision, False
+
+        retry = model.invoke(
+            [
+                SystemMessage(content=AGENT_DECISION_RETRY_SYSTEM),
+                HumanMessage(content=prompt),
+            ]
+        )
+        decision = _parse_agent_decision(str(retry.content))
+        if decision is not None:
+            return decision, True
+    except Exception as exc:
+        logger.error("Error in agent web-search decision: %s", exc)
+    return {"use_web_search": False, "search_query": "", "reason": "Agent decision was unavailable."}, True
+
+
+def _merge_web_results(results: list[dict[str, Any]], new_results: list[dict[str, Any]]) -> None:
+    """Append new web results while deduplicating by URL."""
+    known_urls = {str(row.get("url", "")).strip() for row in results if str(row.get("url", "")).strip()}
+    for row in new_results:
+        url = str(row.get("url", "")).strip()
+        if url and url in known_urls:
+            continue
+        results.append(row)
+        if url:
+            known_urls.add(url)
+
+
+def _markdown_link_citations(answer: str) -> list[dict[str, Any]]:
+    """Extract direct Markdown links from an answer for frontend citation display."""
+    citations: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for title, url in re.findall(r"\[([^\]]+)\]\((https?://[^\s)]+)\)", answer):
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        citations.append(
+            {
+                "modality": "web",
+                "source": urlparse(url).netloc or "web",
+                "title": title.strip() or url,
+                "url": url,
+            }
+        )
+    return citations
+
+
+def answer_with_agent(
+    settings: Settings,
+    question: str,
+    chat_history: list[dict[str, str]],
+    local_evidence: str,
+    local_rows: list[dict[str, Any]],
+    llm_settings: dict[str, Any],
+) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
+    """Plan, optionally research, and answer a question through one agent controller."""
+    decision, decision_retry = _agent_decision(
+        settings,
+        question,
+        chat_history,
+        local_evidence,
+        llm_settings,
+    )
+    web_results: list[dict[str, Any]] = []
+    search_queries: list[str] = []
+    search_trace: list[dict[str, Any]] = []
+    seen_queries: set[str] = set()
+    next_query = decision.get("search_query", "")
+
+    for _ in range(3):
+        if (
+            not decision.get("use_web_search")
+            or not next_query
+            or not settings.web_search_enabled
+            or not settings.tavily_api_key.strip()
+        ):
+            break
+        normalized_query = next_query.casefold()
+        if normalized_query in seen_queries:
+            break
+        seen_queries.add(normalized_query)
+        search_queries.append(next_query)
+        results = search_web_with_tavily(settings, next_query)
+        _merge_web_results(web_results, results)
+        search_trace.append({"query": next_query, "result_count": len(results)})
+        if not results:
+            break
+        decision, retry_used = _agent_decision(
+            settings,
+            question,
+            chat_history,
+            f"{local_evidence}\n\nWeb evidence:\n{web_results}",
+            llm_settings,
+        )
+        decision_retry = decision_retry or retry_used
+        next_query = decision.get("search_query", "")
+
+    evidence = local_evidence
+    if web_results:
+        web_block = "\n\n".join(
+            f"Title: {row.get('title', '')}\nURL: {row.get('url', '')}\nSnippet: {row.get('content', '')}"
+            for row in web_results
+        )
+        evidence = f"{evidence}\n\nWeb evidence:\n{web_block}".strip()
+    prompt = (
+        f"Question:\n{question}\n\nEvidence:\n{evidence or '(none)'}\n\n"
+        "Answer using the evidence. Cite web evidence inline as direct Markdown links [title](url). "
+        "Do not use numbered source citations. If evidence is insufficient, say so clearly."
+    )
+    try:
+        model = get_chat_model(settings, llm_settings)
+        has_image_evidence = any(
+            str(row.get("image_data_url", "")).startswith("data:image/") for row in local_rows
+        )
+        if has_image_evidence:
+            human_content = _build_image_human_content(
+                prompt,
+                local_rows,
+                len(local_rows),
+                "\n\nInspect the attached images directly before answering.",
+            )
+            response = model.invoke([SystemMessage(content=WEB_ANSWER_SYSTEM), HumanMessage(content=human_content)])
+        else:
+            response = model.invoke([SystemMessage(content=WEB_ANSWER_SYSTEM), HumanMessage(content=prompt)])
+        answer = str(response.content).strip()
+    except Exception as exc:
+        logger.error("Error in agent answer generation: %s", exc)
+        answer = "I could not generate a final answer from the available evidence."
+
+    citations = [
+        {
+            "chunk_id": row.get("chunk_id"),
+            "filename": row.get("filename"),
+            "page": row.get("page"),
+            "section": row.get("section"),
+            "asset_id": row.get("asset_id"),
+            "modality": row.get("modality", "text"),
+            "image_data_url": row.get("image_data_url"),
+            "storage_uri": row.get("storage_uri"),
+        }
+        for row in local_rows
+    ]
+    citations.extend(_markdown_link_citations(answer))
+    diagnostics = {
+        "agent_decision": decision,
+        "agent_decision_retry": decision_retry,
+        "web_search_queries": search_queries,
+        "web_search_trace": search_trace,
+        "web_hits": web_results,
+    }
+    return answer, citations, diagnostics
+
+
 def answer_with_web_results(
     settings: Settings,
     question: str,
@@ -304,7 +510,8 @@ def answer_with_web_results(
         f"Recent history:\n{history_text}\n\n"
         f"Question:\n{question}\n\n"
         f"Web sources:\n{sources_block}\n\n"
-        "Answer using the sources and include inline citations like [source 1]."
+        "Answer using only these sources. Cite claims directly with Markdown links in the format "
+        "[source title](source URL), using the exact title and URL provided above. Do not invent sources."
     )
 
     try:
@@ -315,9 +522,37 @@ def answer_with_web_results(
         logger.error(f"Error in answer_with_web_results: {e}")
         answer = "I found web results but could not generate a final response from them."
 
-    citations: list[dict[str, Any]] = []
-    for row in web_results:
+    cited_source_numbers = {
+        int(match)
+        for match in re.findall(r"\[source\s+(\d+)\]", answer, flags=re.IGNORECASE)
+        if int(match) <= len(web_results)
+    }
+    cited_source_urls = {
+        str(row.get("url", "")).strip()
+        for row in web_results
+        if str(row.get("url", "")).strip() and str(row.get("url", "")).strip() in answer
+    }
+
+    def replace_source_marker(match: re.Match[str]) -> str:
+        source_number = int(match.group(1))
+        if source_number < 1 or source_number > len(web_results):
+            return ""
+        row = web_results[source_number - 1]
+        title = str(row.get("title", "")).strip() or str(row.get("url", "")).strip() or "Web source"
         url = str(row.get("url", "")).strip()
+        return f"[{title}]({url})" if url else title
+
+    answer = re.sub(
+        r"\[source\s+(\d+)\]",
+        replace_source_marker,
+        answer,
+        flags=re.IGNORECASE,
+    )
+    citations: list[dict[str, Any]] = []
+    for index, row in enumerate(web_results, start=1):
+        url = str(row.get("url", "")).strip()
+        if index not in cited_source_numbers and url not in cited_source_urls:
+            continue
         host = urlparse(url).netloc or "web"
         citations.append(
             {
